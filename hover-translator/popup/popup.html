@@ -16,29 +16,13 @@
         <span class="brand-name">Hover Translator</span>
       </div>
       <label class="toggle" title="Enable/Disable">
+        <span class="toggle-state" id="toggle-state">On</span>
         <input type="checkbox" id="toggle-enabled">
         <span class="toggle-slider"></span>
       </label>
     </header>
 
-    <!-- Usage bar -->
-    <div class="usage-section" id="usage-section">
-      <div class="usage-label">
-        <span>Today's usage</span>
-        <span id="usage-count">0 / 100</span>
-      </div>
-      <div class="usage-bar">
-        <div class="usage-bar-fill" id="usage-bar-fill"></div>
-      </div>
-    </div>
-
-    <!-- Premium badge (hidden by default) -->
-    <div class="premium-active" id="premium-active" style="display:none">
-      <span>★ Premium active</span>
-      <span class="premium-sub">Unlimited words</span>
-    </div>
-
-    <!-- Language selector -->
+    <!-- Language selector (primary action — always first) -->
     <div class="section">
       <label class="section-label" for="target-lang">Translate to</label>
       <select id="target-lang" class="select">
@@ -67,7 +51,27 @@
       </select>
     </div>
 
-    <!-- Premium activation -->
+    <div class="divider"></div>
+
+    <!-- Usage bar -->
+    <div class="usage-section" id="usage-section">
+      <div class="usage-label">
+        <span>Today's usage</span>
+        <span id="usage-count">0 / 100</span>
+      </div>
+      <div class="usage-bar">
+        <div class="usage-bar-fill" id="usage-bar-fill"></div>
+      </div>
+      <div class="usage-remaining" id="usage-remaining" style="display:none"></div>
+    </div>
+
+    <!-- Premium active badge (hidden by default) -->
+    <div class="premium-active" id="premium-active" style="display:none">
+      <span>★ Premium active</span>
+      <span class="premium-sub">Unlimited words</span>
+    </div>
+
+    <!-- Premium CTA (shown when free and below limit) -->
     <div class="section" id="premium-section">
       <div class="premium-cta">
         <div class="premium-cta-text">
@@ -75,6 +79,17 @@
           <span>Unlimited for just €14.99</span>
         </div>
         <button id="btn-activate" class="btn-primary">Activate</button>
+      </div>
+    </div>
+
+    <!-- Limit-reached CTA (hidden by default) -->
+    <div class="section" id="limit-section" style="display:none">
+      <div class="limit-cta">
+        <div class="premium-cta-text">
+          <strong>Daily limit reached</strong>
+          <span>Get Premium for unlimited translations</span>
+        </div>
+        <button id="btn-activate-limit" class="btn-primary">Upgrade</button>
       </div>
     </div>
 
@@ -86,12 +101,19 @@
         <button id="btn-validate" class="btn-primary">OK</button>
       </div>
       <p class="key-error" id="key-error" style="display:none">Invalid key. Make sure you copied it correctly.</p>
-      <a href="https://promeseo.gumroad.com/l/szWkd" target="_blank" class="buy-link" id="buy-link">Buy license key →</a>
+      <div class="key-footer">
+        <span class="key-price">€14.99 one-time</span>
+        <a href="https://promeseo.gumroad.com/l/szWkd" target="_blank" class="buy-link">Buy license key →</a>
+      </div>
     </div>
 
     <!-- Footer -->
     <footer>
-      <button id="btn-options" class="btn-link">⚙ Advanced settings</button>
+      <button id="btn-options" class="btn-link">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Advanced settings
+      </button>
+      <span class="version">v1.0.0</span>
     </footer>
 
   </div>
