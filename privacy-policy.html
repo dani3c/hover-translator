@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — Hover Translator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 16px;
+      line-height: 1.7;
+      color: #1a1a1a;
+      background: #f9f9f9;
+    }
+    header {
+      background: #1a1a2e;
+      padding: 28px 40px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    header h1 {
+      color: #ffffff;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    header span {
+      color: #89b4fa;
+      font-size: 14px;
+    }
+    .container {
+      max-width: 760px;
+      margin: 48px auto;
+      padding: 0 24px 80px;
+    }
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-top: 40px;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #89b4fa;
+    }
+    h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-top: 24px;
+      margin-bottom: 6px;
+    }
+    p { margin-bottom: 14px; color: #333; }
+    ul { margin: 10px 0 14px 24px; }
+    li { margin-bottom: 6px; color: #333; }
+    .meta {
+      font-size: 13px;
+      color: #767676;
+      margin-bottom: 36px;
+      padding: 14px 18px;
+      background: #f0f0f0;
+      border-radius: 6px;
+      border-left: 3px solid #89b4fa;
+    }
+    .highlight {
+      background: #eef2ff;
+      border-left: 3px solid #89b4fa;
+      padding: 14px 18px;
+      border-radius: 4px;
+      margin: 16px 0;
+      font-size: 15px;
+      color: #1a1a2e;
+    }
+    a { color: #89b4fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    footer {
+      text-align: center;
+      margin-top: 60px;
+      font-size: 13px;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Hover Translator</h1>
+    <span>Privacy Policy</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="meta">
+    <strong>Effective date:</strong> June 19, 2026<br>
+    <strong>Last updated:</strong> June 19, 2026<br>
+    <strong>Developer:</strong> Daniel Marina &lt;daniel.marina@gmail.com&gt;
+  </div>
+
+  <p>This Privacy Policy explains how Hover Translator ("the extension", "we", "our") handles information when you use the Chrome extension. We are committed to being transparent and to collecting as little data as possible.</p>
+
+  <div class="highlight">
+    <strong>The short version:</strong> Hover Translator stores your settings and usage counter locally on your device. We do not have a server. We do not collect, transmit, or sell any personal data.
+  </div>
+
+  <!-- ────────────────────────────────────────── -->
+  <h2>1. What data we collect</h2>
+
+  <h3>Data stored locally on your device</h3>
+  <p>The extension uses <code>chrome.storage.local</code> — storage that lives entirely within your Chrome browser on your own device. The following information is stored:</p>
+  <ul>
+    <li><strong>Extension settings</strong> — your chosen target language, source language, hover delay, translation provider, and excluded domains.</li>
+    <li><strong>Daily usage counter</strong> — a count of words translated today, reset every 24 hours, used to enforce the free tier limit of 100 words/day.</li>
+    <li><strong>Premium license key</strong> — if you activate a Premium license, your key is stored locally to validate your access on future sessions.</li>
+    <li><strong>Translation cache</strong> — recent translation results are cached locally to reduce API calls and speed up repeated lookups.</li>
+  </ul>
+  <p>This data never leaves your device and is never sent to our servers, because we do not operate any servers.</p>
+
+  <h3>Data we do NOT collect</h3>
+  <ul>
+    <li>We do not collect your name, email address, or any account information.</li>
+    <li>We do not track which websites you visit.</li>
+    <li>We do not record which words you translate.</li>
+    <li>We do not use analytics, telemetry, or crash reporting tools.</li>
+    <li>We do not use cookies.</li>
+  </ul>
+
+  <!-- ────────────────────────────────────────── -->
+  <h2>2. Third-party services</h2>
+
+  <p>When you hover over a word, the extension sends a translation request to one of the following third-party APIs. The word being translated is included in the request. No other personal data is sent.</p>
+
+  <h3>Google Translate (unofficial API)</h3>
+  <p>Used by default for high-quality translations. Requests are sent to <code>translate.googleapis.com</code>. This service is operated by Google LLC. Please refer to <a href="https://policies.google.com/privacy" target="_blank">Google's Privacy Policy</a> for information on how they handle request data.</p>
+
+  <h3>MyMemory Translation API</h3>
+  <p>An optional translation provider. If you provide your email address in the extension settings to increase your MyMemory daily limit, that email is sent directly to MyMemory's servers as part of the API request. We do not store or process your email — it goes directly from your browser to MyMemory. Please refer to <a href="https://mymemory.translated.net/doc/privacypolicy.php" target="_blank">MyMemory's Privacy Policy</a>.</p>
+
+  <h3>Wikipedia API</h3>
+  <p>Used to fetch short descriptions for proper nouns (names, places, organisations). Requests are sent to <code>en.wikipedia.org</code>. Please refer to the <a href="https://foundation.wikimedia.org/wiki/Privacy_policy" target="_blank">Wikimedia Privacy Policy</a>.</p>
+
+  <h3>LibreTranslate (optional)</h3>
+  <p>An advanced optional provider. If you configure a LibreTranslate instance in the settings, translation requests are sent to the URL you specify. We have no control over that server.</p>
+
+  <!-- ────────────────────────────────────────── -->
+  <h2>3. Premium license</h2>
+
+  <p>Premium licenses are sold through Gumroad (Gumroad, Inc.). When you purchase a license, your payment and billing information is handled entirely by Gumroad — we never see your card details. Gumroad's privacy practices are governed by the <a href="https://gumroad.com/privacy" target="_blank">Gumroad Privacy Policy</a>.</p>
+
+  <p>The license key you receive is validated locally within the extension using a cryptographic method (HMAC). No activation request is sent to any external server. Your key is stored in <code>chrome.storage.local</code> on your device only.</p>
+
+  <!-- ────────────────────────────────────────── -->
+  <h2>4. Permissions explained</h2>
+
+  <p>The extension requests the following Chrome permissions:</p>
+  <ul>
+    <li><strong>storage</strong> — to save your settings and usage counter locally.</li>
+    <li><strong>activeTab</strong> — to read the text of the word you hover over on the current page. The extension only reads individual words on demand; it does not scan or transmit the full content of pages you visit.</li>
+    <li><strong>Host permissions (<code>https://*/*</code>)</strong> — required to inject the hover detection script on any website and to contact translation APIs. The extension only makes outgoing requests to the translation APIs listed in Section 2.</li>
+  </ul>
+
+  <!-- ────────────────────────────────────────── -->
+  <h2>5. Children's privacy</h2>
+
+  <p>Hover Translator is not directed at children under the age of 13. We do not knowingly collect any information from children.</p>
+
+  <!-- ────────────────────────────────────────── -->
+  <h2>6. Changes to this policy</h2>
+
+  <p>If we make material changes to this Privacy Policy, we will update the "Last updated" date at the top of this page. We encourage you to review this page periodically.</p>
+
+  <!-- ────────────────────────────────────────── -->
+  <h2>7. Contact</h2>
+
+  <p>If you have any questions about this Privacy Policy, you can contact us at:</p>
+  <p><strong>Daniel Marina</strong><br>
+  <a href="mailto:daniel.marina@gmail.com">daniel.marina@gmail.com</a></p>
+
+  <footer>
+    Hover Translator · Privacy Policy · Last updated June 19, 2026
+  </footer>
+
+</div>
+</body>
+</html>
