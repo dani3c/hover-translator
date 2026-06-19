@@ -1,0 +1,251 @@
+/* =============================================================================
+   Hover Translator — Tooltip Styles
+   ============================================================================= */
+
+#hover-translator-tooltip {
+  all: initial; /* reset any page styles */
+  position: fixed;
+  z-index: 2147483647; /* max z-index */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  pointer-events: auto;
+  box-sizing: border-box;
+  max-width: 260px;
+  min-width: 120px;
+
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border: 1px solid rgba(137, 180, 250, 0.2);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+
+  opacity: 0;
+  transform: translateY(-4px) scale(0.97);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  display: none;
+}
+
+#hover-translator-tooltip.ht-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  display: block;
+}
+
+/* Header row */
+#hover-translator-tooltip .ht-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 4px;
+  gap: 8px;
+}
+
+#hover-translator-tooltip .ht-word {
+  font-weight: 600;
+  color: #89b4fa;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+}
+
+/* Body */
+#hover-translator-tooltip .ht-body {
+  padding: 2px 12px 10px;
+}
+
+#hover-translator-tooltip .ht-translation {
+  font-size: 15px;
+  font-weight: 500;
+  color: #cdd6f4;
+}
+
+/* Loading spinner */
+#hover-translator-tooltip .ht-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(137, 180, 250, 0.3);
+  border-top-color: #89b4fa;
+  border-radius: 50%;
+  animation: ht-spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin: 4px 0;
+}
+
+@keyframes ht-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* English definition (fallback for untranslatable words) */
+#hover-translator-tooltip .ht-definition {
+  font-size: 12px;
+  color: #cdd6f4;
+  line-height: 1.5;
+}
+
+#hover-translator-tooltip .ht-pos {
+  font-size: 10px;
+  font-style: italic;
+  color: #89b4fa;
+  text-transform: lowercase;
+  margin-right: 2px;
+}
+
+/* Alternative translations — shown after primary as "/ alt1 / alt2" */
+#hover-translator-tooltip .ht-alts {
+  font-size: 13px;
+  font-weight: 400;
+  color: #7f849c;
+}
+
+/* Multi-POS display (verb + noun, verb + adj, etc.) */
+#hover-translator-tooltip .ht-pos-groups-wrap {
+  padding: 2px 0;
+}
+#hover-translator-tooltip .ht-pos-group {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #cdd6f4;
+  line-height: 1.4;
+}
+#hover-translator-tooltip .ht-pos-group:first-child {
+  margin-top: 0;
+}
+#hover-translator-tooltip .ht-pos-label {
+  font-size: 10px;
+  font-style: italic;
+  color: #89b4fa;
+  margin-right: 3px;
+  text-transform: lowercase;
+}
+
+/* Original source phrase hint — shown when context translation is primary */
+#hover-translator-tooltip .ht-phrase-hint {
+  margin-top: 3px;
+  font-size: 10px;
+  color: #45475a;
+  font-style: italic;
+  letter-spacing: 0.01em;
+}
+
+/* "Sin traducción directa" label */
+#hover-translator-tooltip .ht-no-translation {
+  font-size: 12px;
+  color: #6c7086;
+  font-style: italic;
+}
+
+/* Word-only translation (secondary, shown when it differs from context) */
+#hover-translator-tooltip .ht-word-only {
+  margin-top: 3px;
+  font-size: 11px;
+  color: #585b70;
+}
+
+/* Context phrase */
+#hover-translator-tooltip .ht-context {
+  margin-top: 5px;
+  font-size: 11px;
+  color: #585b70;
+  font-style: italic;
+  line-height: 1.4;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 4px;
+}
+
+/* Separable verb infinitive label in the tooltip header */
+#hover-translator-tooltip .ht-sep-infinitive {
+  font-size: 11px;
+  font-weight: 400;
+  color: #a6e3a1;
+  opacity: 0.9;
+  margin-left: 4px;
+}
+
+/* Separable verb hint (German Trennbare Verben: bereitet...vor → vorbereiten) */
+#hover-translator-tooltip .ht-sep-verb {
+  margin-top: 5px;
+  font-size: 11px;
+  color: #a6e3a1;
+  line-height: 1.4;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  padding-top: 4px;
+}
+#hover-translator-tooltip .ht-sep-verb em {
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* Usage counter */
+#hover-translator-tooltip .ht-usage {
+  font-size: 10px;
+  color: #6c7086;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Premium badge */
+#hover-translator-tooltip .ht-badge-premium {
+  font-size: 10px;
+  color: #f9e2af;
+  background: rgba(249, 226, 175, 0.15);
+  border: 1px solid rgba(249, 226, 175, 0.3);
+  border-radius: 4px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Limit reached state */
+#hover-translator-tooltip .ht-limit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 10px;
+}
+
+#hover-translator-tooltip .ht-limit span:first-child {
+  font-size: 13px;
+  font-weight: 500;
+  color: #fab387;
+}
+
+#hover-translator-tooltip .ht-limit-sub {
+  font-size: 11px;
+  color: #6c7086;
+}
+
+#hover-translator-tooltip .ht-upgrade-link {
+  color: #89b4fa !important;
+  text-decoration: underline !important;
+  cursor: pointer !important;
+  background: none !important;
+  border: none !important;
+  padding: 0 !important;
+  font-size: 11px !important;
+}
+
+/* Unknown word state */
+#hover-translator-tooltip .ht-unknown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#hover-translator-tooltip .ht-unknown span {
+  color: #6c7086;
+  font-size: 12px;
+  font-style: italic;
+}
+#hover-translator-tooltip .ht-search-link {
+  font-size: 12px;
+  color: #89b4fa;
+  text-decoration: none;
+  display: inline-block;
+}
+#hover-translator-tooltip .ht-search-link:hover {
+  text-decoration: underlin
