@@ -167,29 +167,31 @@
 
       // CJK character ranges (Japanese hiragana, katakana, kanji + Korean + Chinese)
       const cjkChar  = /[぀-ゟ゠-ヿ一-鿿㐀-䶿豈-﫿가-힯]/;
-      const wordChar = /[\wÀ-ÿÁáÉéÍíÓóÚúÜüÑñÄäÖöÜüÀ-ɏ]/;
+      const wordChar = /[\wÀ-ÿÁáÉéÍíÓóÚúÜüÑñÄäÖöÜüÀ-ɏ\u0600-\u06FF\u0750-\u077F]/;
 
       const charAtCursor = text[start] || '';
 
       if (cjkChar.test(charAtCursor)) {
-        // ── CJK / Japanese path ────────────────────────────────────────────────
+        // ── CJK / Japanese / Korean path ──────────────────────────────────────
         // Japanese has no spaces between words. We expand by script type:
         //   • Katakana (ァ-ン): loanwords — keep expanding katakana chars
-        //   • Kanji (一-鿿) + hiragana mix: compound words — expand up to 6 chars
+        //   • Kanji (一-鿿) + hiragana mix: compound words — up to 6 chars
+        //   • Korean (가-힯): syllable blocks — words are typically 2-4 syllables
         // A cap prevents grabbing entire sentences.
-        const isKatakana = /[゠-ヿ]/.test(charAtCursor);
+        const isKorean   = /[가-힯]/.test(charAtCursor);
+        const isKatakana = !isKorean && /[゠-ヿ]/.test(charAtCursor);
         const expandCJK  = isKatakana
           ? /[゠-ヿー]/ // katakana + prolonged sound mark ー
-          : /[぀-ゟ一-鿿㐀-䶿豈-﫿]/; // kanji + hiragana
-        // Chinese uses the same kanji Unicode range as Japanese but has no hiragana.
-        // Chinese words are 1-2 chars — a 6-char right-biased window grabs multi-word
-        // phrases (e.g. "经济正在快速" → "La economía está rápidamente" instead of "economía").
-        // Detect language by checking for hiragana in the surrounding text:
-        //   hiragana present → Japanese → keep 6-char cap for compound words
-        //   no hiragana      → Chinese  → cap at 2 to stay within a single word
+          : isKorean
+            ? /[가-힯]/ // Korean syllable blocks only
+            : /[぀-ゟ一-鿿㐀-䶿豈-﫿]/; // kanji + hiragana
+        // maxLen: Chinese 1-2 chars, Japanese compound up to 6, Korean syllables up to 4.
+        // Hiragana presence distinguishes Japanese from Chinese in mixed text.
+        // Page lang="ja" fallback catches all-kanji headlines with no nearby hiragana.
         const nearbyText = text.substring(Math.max(0, start - 10), Math.min(text.length, start + 11));
         const hasHiragana = /[぀-ゟ]/.test(nearbyText);
-        const maxLen = isKatakana ? 12 : (hasHiragana ? 6 : 2);
+        const isJapanesePage = (document.documentElement.lang || '').toLowerCase().startsWith('ja');
+        const maxLen = isKatakana ? 12 : isKorean ? 4 : (hasHiragana || isJapanesePage ? 6 : 2);
 
         end = start + 1;
         while (end < text.length && (end - start) < maxLen && expandCJK.test(text[end])) end++;
@@ -736,7 +738,7 @@
         // ── No word translation and no definition: context is all we have ──
         mainHtml = `<span class="ht-translation">${escapeHtml(contextTranslation)}</span>`;
       } else {
-        mainHtml = `<span class="ht-no-translation">sin traducción directa</span>`;
+        mainHtml = `<span class="ht-no-translation">no direct translation</span>`;
       }
 
       // Hint when text is already in the target language
