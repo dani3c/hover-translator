@@ -1165,10 +1165,48 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
   // articles (e.g. "The Defenders" Marvel show) — skip Wikipedia entirely.
   if (isCapitalized) {
     const wiki = await lookupWikipedia(word, targetLang);
-    if (wiki) return [wiki];
+    if (wiki) {
+      // If the Wikipedia result describes a geographic place but the surrounding
+      // context signals a person (e.g. "Vance" → Belgian commune vs VP Vance),
+      // try to find the person article instead.
+      const isGeoResult = /\b(commune|municipality|village|town\s+in|city\s+in|borough|hamlet|parish|census-designated|unincorporated community)\b/i.test(wiki.text);
+      if (isGeoResult && context) {
+        const isPersonCtx = /\b(said|says|announced|stated|according\s+to|president|vice[\s-]?president|senator|minister|secretary|governor|congressman|representative|chairman|CEO|founder|director|official|nominee|candidate|spokesperson|spokesman|republican|democrat)\b/i.test(context);
+        if (isPersonCtx) {
+          const personWiki = await lookupWikipediaPersonFallback(word, targetLang);
+          if (personWiki) return [personWiki];
+        }
+      }
+      return [wiki];
+    }
   }
   // FreeDictionary returns an array of {text, pos} (one per POS)
   if (targetLang === 'en') return lookupFreeDictionary(word);
+  return null;
+}
+
+// Fallback when a Wikipedia direct-lookup returns a geographic article but the
+// hover context suggests the word is a person (politician, official, etc.).
+// Tries disambiguation suffixes, then an OpenSearch for "word politician".
+async function lookupWikipediaPersonFallback(word, targetLang) {
+  for (const suffix of ['(politician)', '(American politician)', '(person)']) {
+    const r = await fetchWikiSummary(`${word} ${suffix}`, 'en');
+    if (r) return r;
+  }
+  try {
+    const res = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(word + ' politician')}&limit=3&format=json&origin=*`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const titles = data[1] || [];
+    for (const title of titles) {
+      if (title.toLowerCase().includes(word.toLowerCase())) {
+        const r = await fetchWikiSummary(title, 'en');
+        if (r) return r;
+      }
+    }
+  } catch {}
   return null;
 }
 
