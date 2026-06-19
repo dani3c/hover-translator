@@ -7,7 +7,7 @@ const HMAC_SECRET = '4b3513210b5222f854582282135d18e17aa7fd6d4f997801414a4565069
 const FREE_DAILY_LIMIT = 100;
 
 // Cache version — bump this whenever extraction logic changes to invalidate stale entries.
-const CACHE_VERSION = 89;
+const CACHE_VERSION = 90;
 
 // Providers
 const PROVIDER_MYMEMORY     = 'mymemory';
@@ -419,6 +419,33 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
     return { ...fallbackResult, displayWord: firstWord };
   }
 
+  // ── Same-language early exit ────────────────────────────────────────────────
+  // If the page language (from HTML lang attribute) matches the target language,
+  // the content is already in the right language — no translation should be shown.
+  // Exception: Title-Case proper nouns may still have a useful Wikipedia definition.
+  {
+    const normSrc = (sourceLang || '').split('-')[0].toLowerCase();
+    const normTgt = (targetLang || '').split('-')[0].toLowerCase();
+    if (normSrc && normSrc !== 'auto' && normSrc === normTgt) {
+      // Try Wikipedia only in the target language — no English fallback.
+      // If es.wikipedia doesn't have "escenarios", return null (not in database),
+      // rather than jumping to en.wikipedia and showing an English definition.
+      const lang = normTgt === 'en' ? 'en' : normTgt;
+      const wikiResult = await fetchWikiSummary(word, lang)
+        || (normTgt !== 'en' ? null : await fetchWikiSummary(word, 'en'));
+      const definition = wikiResult ? [wikiResult] : null;
+      return {
+        translation: null, alternatives: [], translatable: false, sameLanguage: true,
+        definition: definition || null,
+        extractedTranslation: null,
+        contextPhrase: context || null,
+        contextTranslation: null,
+        sentenceTranslation: null,
+        sentenceExtracted: null
+      };
+    }
+  }
+
   // Single all-caps word = acronym (GOP, FBI, NATO, etc.).
   // GT translates these phonetically, producing garbage (GOP → "gopo").
   // Try Wikipedia first; fall back to normal GT if Wikipedia has nothing.
@@ -717,7 +744,16 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   const phraseEchoed = phraseRaw && context &&
     phraseRaw.replace(/\s+/g, ' ').trim().toLowerCase() ===
     context.replace(/\s+/g, ' ').trim().toLowerCase();
-  const sameLanguage = !!(wordSameAsInput && (!phraseRaw || phraseEchoed));
+  // ALL-CAPS words (headers, emphasis) in the same language may get normalized by GT
+  // (e.g. "NECESIDADES" → "necesidad"), making wordSameAsInput false even though the
+  // page is already in the target language. Use phrase-echo as same-language fallback.
+  const sameLanguageAllCaps = isAllCaps && !!(phraseRaw && context &&
+    phraseRaw.replace(/\s+/g, ' ').trim().toLowerCase() ===
+    context.replace(/\s+/g, ' ').trim().toLowerCase());
+  const sameLanguage = !!(
+    (wordSameAsInput && (!phraseRaw || phraseEchoed)) ||
+    sameLanguageAllCaps
+  );
 
   // Extract the word's specific translation from GT's chunk alignment.
   // GT returns [[translated_part, source_part], ...] — much more reliable than
@@ -1169,13 +1205,13 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
       // If the Wikipedia result describes a geographic place but the surrounding
       // context signals a person (e.g. "Vance" → Belgian commune vs VP Vance),
       // try to find the person article instead.
-      const isGeoResult = /\b(commune|municipality|village|town\s+in|city\s+in|borough|hamlet|parish|census-designated|unincorporated community)\b/i.test(wiki.text);
-      if (isGeoResult && context) {
-        const isPersonCtx = /\b(said|says|announced|stated|according\s+to|president|vice[\s-]?president|senator|minister|secretary|governor|congressman|representative|chairman|CEO|founder|director|official|nominee|candidate|spokesperson|spokesman|republican|democrat)\b/i.test(context);
-        if (isPersonCtx) {
-          const personWiki = await lookupWikipediaPersonFallback(word, targetLang);
-          if (personWiki) return [personWiki];
-        }
+      // If Wikipedia returns a geographic article for a capitalized word, try to find
+      // a person article instead. Geographic false positives (user reading about a commune)
+      // are rare — most capitalized words in context are people, not places.
+      const isGeoResult = /\b(commun[ae]|comuni?[ao]|municipalit[yé]|municipio|municipality|village|villaggio|pueblo|aldea|localidad|Gemeinde|gemeente|town\s+in|city\s+in|borough|hamlet|parish|census-designated|unincorporated)\b/i.test(wiki.text);
+      if (isGeoResult) {
+        const personWiki = await lookupWikipediaPersonFallback(word, targetLang);
+        if (personWiki) return [personWiki];
       }
       return [wiki];
     }
