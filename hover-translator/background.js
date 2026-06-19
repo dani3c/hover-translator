@@ -1208,7 +1208,7 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
       // If Wikipedia returns a geographic article for a capitalized word, try to find
       // a person article instead. Geographic false positives (user reading about a commune)
       // are rare — most capitalized words in context are people, not places.
-      const isGeoResult = /\b(commun[ae]|comuni?[ao]|municipalit[yé]|municipio|municipality|village|villaggio|pueblo|aldea|localidad|Gemeinde|gemeente|town\s+in|city\s+in|borough|hamlet|parish|census-designated|unincorporated)\b/i.test(wiki.text);
+      const isGeoResult = /\b(commun[ae]|comun[ae]|municipalit[yé]|municipio|municipality|village|villaggio|pueblo|aldea|localidad|Gemeinde|gemeente|town\s+in|city\s+in|borough|hamlet|parish|census-designated|unincorporated)\b/i.test(wiki.text);
       if (isGeoResult) {
         const personWiki = await lookupWikipediaPersonFallback(word, targetLang);
         if (personWiki) return [personWiki];
@@ -1221,26 +1221,37 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
   return null;
 }
 
-// Fallback when a Wikipedia direct-lookup returns a geographic article but the
-// hover context suggests the word is a person (politician, official, etc.).
-// Tries disambiguation suffixes, then an OpenSearch for "word politician".
+// Fallback when a Wikipedia direct-lookup returns a geographic article.
+// Uses Wikipedia's full-text Search API (not OpenSearch) which finds "JD Vance"
+// when searching "Vance", unlike OpenSearch which only matches title prefixes.
 async function lookupWikipediaPersonFallback(word, targetLang) {
-  for (const suffix of ['(politician)', '(American politician)', '(person)']) {
+  // 1. Try common disambiguation suffixes first (cheap, exact)
+  for (const suffix of ['(politician)', '(American politician)']) {
     const r = await fetchWikiSummary(`${word} ${suffix}`, 'en');
     if (r) return r;
   }
+  // 2. Wikipedia full-text search — finds "JD Vance" for query "Vance"
   try {
     const res = await fetch(
-      `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(word + ' politician')}&limit=3&format=json&origin=*`
+      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(word)}&srnamespace=0&srlimit=5&srprop=&format=json&origin=*`
     );
     if (!res.ok) return null;
     const data = await res.json();
-    const titles = data[1] || [];
-    for (const title of titles) {
-      if (title.toLowerCase().includes(word.toLowerCase())) {
-        const r = await fetchWikiSummary(title, 'en');
-        if (r) return r;
-      }
+    const hits = (data?.query?.search || [])
+      .map(h => h.title)
+      .filter(t => {
+        const tl = t.toLowerCase();
+        // Skip exact match (it's the same geographic article we already have)
+        if (tl === word.toLowerCase()) return false;
+        // Skip "City, State" style geographic titles
+        if (/, [A-Z]/.test(t)) return false;
+        // Skip titles with explicit geographic keywords
+        if (/\b(county|district|township|municipality|commune|borough|village|city|town)\b/i.test(t)) return false;
+        return true;
+      });
+    for (const title of hits.slice(0, 2)) {
+      const r = await fetchWikiSummary(title, 'en');
+      if (r) return r;
     }
   } catch {}
   return null;
