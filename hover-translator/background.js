@@ -446,13 +446,16 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
     }
   }
 
-  // Single all-caps word = acronym (GOP, FBI, NATO, etc.).
-  // GT translates these phonetically, producing garbage (GOP → "gopo").
+  // Single all-caps word = acronym (GOP, FBI, NATO, US, UK, EU, UN, etc.).
+  // GT translates these phonetically or as common words, producing wrong results:
+  //   "US" → "nosotros", "GOP" → "gopo", etc.
   // Try Wikipedia first; fall back to normal GT if Wikipedia has nothing.
   // Also matches dotted abbreviations: U.S., U.K., D.C. (letters alternating with dots)
+  // 2-letter all-caps (US, UK, EU, UN, AI) are included — they are almost always
+  // abbreviations in news/article context, not pronouns.
   const isDottedAbbrev = /^[A-Za-z](\.[A-Za-z])+\.?$/.test(word);
   const isSingleAcronym = !word.includes(' ') && (
-    (isAllCaps && /^[A-ZÀ-Ö]+$/.test(word) && word.length >= 3) || isDottedAbbrev
+    (isAllCaps && /^[A-ZÀ-Ö]+$/.test(word) && word.length >= 2) || isDottedAbbrev
   );
   if (isSingleAcronym) {
     const acronymDef = await lookupDefinition(word, targetLang, context);
