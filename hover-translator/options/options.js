@@ -55,10 +55,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   providerRadios.forEach(r => { r.checked = (r.value === savedProvider); });
   updateProviderUI(savedProvider);
 
-  // Usage display
+  // Usage display + show engine section only for premium
+  const engineSection = document.getElementById('engine-section');
   if (usage.isPremium) {
     freeStatus.style.display = 'none';
     activeStatus.style.display = 'block';
+    if (engineSection) engineSection.style.display = 'block';
   } else {
     usageDisplay.textContent = `${usage.count || 0} / ${usage.limit || 100} words`;
   }
@@ -175,6 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (result && result.success) {
         freeStatus.style.display = 'none';
         activeStatus.style.display = 'block';
+        if (engineSection) engineSection.style.display = 'block';
         showSaveStatus();
       } else {
         keyError.style.display = 'block';
