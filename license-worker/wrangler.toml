@@ -1,0 +1,18 @@
+name = "hover-translator-licenses"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# KV namespace for tracking activated license keys (one-time use per key).
+# Before deploying, create the namespace:
+#   wrangler kv:namespace create ACTIVATED_KEYS
+# Then paste the returned id below.
+[[kv_namespaces]]
+binding = "ACTIVATED_KEYS"
+id = "9d39a739a87c4137a2122be36901758b"
+
+# Variables secretas: NO las pongas aquí.
+# Añádelas en el dashboard de Cloudflare o con:
+#   wrangler secret put HMAC_SECRET
+#   wrangler secret put RESEND_API_KEY
+#   wrangler secret put WEBHOOK_TOKEN
+#   wrangler secret put FROM_EMAIL
