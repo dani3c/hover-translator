@@ -8,7 +8,7 @@
 **✅ Publicada en Chrome Web Store**
 https://chromewebstore.google.com/detail/hover-translator/pjbgkafflfgaaknaaekbnpjjohpeihoa
 
-**Versión actual:** 1.0.3
+**Versión en store:** 1.0.2 · **En desarrollo (pendiente de subir):** 1.0.3
 **Modelo:** Freemium — 100 palabras/día gratis · €14.99 pago único para Premium
 
 ---
