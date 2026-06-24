@@ -230,6 +230,19 @@
   font-size: 11px !important;
 }
 
+/* Same-language note — appears below definition or as standalone */
+#hover-translator-tooltip .ht-same-lang {
+  font-size: 10px !important;
+  color: #45475a !important;
+  font-style: italic;
+  margin-top: 4px;
+}
+#hover-translator-tooltip .ht-same-lang-note {
+  font-size: 10px !important;
+  color: #45475a !important;
+  font-style: italic;
+}
+
 /* Unknown word state */
 #hover-translator-tooltip .ht-unknown {
   display: flex;
