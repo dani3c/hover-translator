@@ -456,6 +456,10 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
           'deshalb': { t: 'por eso',       alts: ['por eso mismo'],                  pos: 'conj.' },
           'deswegen':{ t: 'por eso',       alts: ['por esa razón'],                  pos: 'conj.' },
           'außerdem':{ t: 'además',        alts: ['por otro lado'],                  pos: 'conj.' },
+          // Correlativas y grados
+          'je':      { t: 'alguna vez',    alts: ['nunca', 'en absoluto'],           pos: 'adv.'  },
+          'desto':   { t: 'más',           alts: ['cuanto más... más', 'tanto más'], pos: 'conj.' },
+          'umso':    { t: 'tanto más',     alts: ['aún más', 'cuanto más'],          pos: 'conj.' },
         },
         'fr': {
           // Pronombres
@@ -567,7 +571,20 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
 
       const _langWords = FUNC_WORDS_ES[_effectiveSrc];
       if (_langWords) {
-        const _entry = _langWords[word.toLowerCase()];
+        const _wordLow = word.toLowerCase();
+        // "je ... desto/umso" correlative: "Je mehr... desto mehr" = "Cuanto más... más"
+        if (_wordLow === 'je' && _effectiveSrc === 'de' && /\b(desto|umso)\b/i.test(sentence || '')) {
+          return {
+            translation: 'cuanto',
+            alternatives: ['cuanto más...', 'entre... más'],
+            translatable: true, sameLanguage: false, definition: null,
+            extractedTranslation: null, contextPhrase: context || null,
+            contextTranslation: null, sentenceTranslation: null, sentenceExtracted: null,
+            posGroups: [{ pos: 'conj.', translations: ['cuanto', 'cuanto más...', 'entre... más'] }],
+            isGermanPage: true, isGermanNoun: false,
+          };
+        }
+        const _entry = _langWords[_wordLow];
         if (_entry) {
           return {
             translation: _entry.t,
@@ -718,12 +735,43 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
     const lowerPhrase = word.toLowerCase();
     const fullResult = await callProviderWithContext(lowerPhrase, null, settings, pageLang);
     if (fullResult && fullResult.translation) {
-      return { ...fullResult, displayWord: word };
+      // Only accept if the translation isn't longer than the input phrase.
+      // "reino unido" (2) → "Vereinigtes Königreich" (2) ✓ keep
+      // "ausländerhass südafrikas wirtschaft" (3) → "xenofobia en la economía de Sudáfrica" (6) ✗ skip
+      const inputWords = lowerPhrase.trim().split(/\s+/).length;
+      const transWords = fullResult.translation.trim().split(/\s+/).length;
+      if (transWords <= inputWords) {
+        return { ...fullResult, displayWord: word };
+      }
     }
     // Last resort: translate just the first word.
-    const firstWord = word.split(/\s+/)[0].toLowerCase();
+    // Keep original casing for proper noun Wikipedia lookup
+    const firstWord = word.split(/\s+/)[0]; // original case, e.g. "Starmers"
+    // Try Wikipedia lookup for the first word BEFORE calling GT.
+    // GT would wrongly translate "Starmers" → "estrellas" (star+s), but Wikipedia
+    // finds "Starmer" → Keir Starmer via the genitive-strip in lookupWikipediaPersonFallback.
+    const isFirstCapitalized = firstWord.length >= 2 &&
+      firstWord[0] === firstWord[0].toUpperCase() && firstWord[0] !== firstWord[0].toLowerCase();
+    if (isFirstCapitalized) {
+      // Pass null context so extractFullName doesn't expand "Starmers" → "Starmers Rücktritt"
+      // (which causes full-text search to find wrong article like "2025 German federal election")
+      const firstWordDef = await lookupDefinition(firstWord, targetLang, null);
+      if (firstWordDef) {
+        // Use article title as display (e.g. "Keir Starmer" for "Starmers")
+        const artTitle = firstWordDef?.[0]?.title;
+        const fwDisplay = artTitle
+          ? artTitle.replace(/\s*\(.*\)\s*$/, '').trim().split(/\s+/).slice(0, 2).join(' ')
+          : firstWord;
+        return {
+          translation: null, alternatives: [], translatable: false,
+          definition: firstWordDef, displayWord: fwDisplay,
+          contextPhrase: context || null, contextTranslation: null,
+          sentenceTranslation: null, sentenceExtracted: null,
+        };
+      }
+    }
     const fallbackResult = await callProviderWithContext(firstWord, null, settings, pageLang);
-    return { ...fallbackResult, displayWord: word };
+    return { ...fallbackResult, displayWord: firstWord };
   }
 
   // ── Same-language early exit ────────────────────────────────────────────────
@@ -1061,6 +1109,24 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
           const [cA, cB] = candidates;
           if (fullLower.includes(`${cA} ${cB}`)) sentenceExtracted = `${cA} ${cB}`;
           else if (fullLower.includes(`${cB} ${cA}`)) sentenceExtracted = `${cB} ${cA}`;
+        }
+        // Non-consecutive fallback: neither order was adjacent, but the earliest-appearing
+        // candidate may still be the correct translation (e.g. "verteidigt" → unique tokens
+        // ["defiende","conversaciones"] with "las" between them in "Merz defiende las conversaciones".
+        // "defiende" is at V2 position (word 2) → safe to use it alone).
+        if (!sentenceExtracted && candidates.length >= 1) {
+          const _nonFnCands = candidates.filter(t => !_spFunctionWords.has(t));
+          const ranked = _nonFnCands
+            .map(t => ({ t, pos: fullLower.indexOf(t) }))
+            .filter(({ pos }) => pos !== -1)
+            .sort((a, b) => a.pos - b.pos);
+          if (ranked.length > 0) {
+            const { t: earliest, pos } = ranked[0];
+            // Only safe when the candidate appears within the first 3 words (V2 / subject-verb position).
+            // Avoids false positives from unrelated tokens that happen to be unique.
+            const wordsBefore = fullLower.slice(0, pos).trim().split(/\s+/).filter(Boolean).length;
+            if (wordsBefore <= 2) sentenceExtracted = earliest;
+          }
         }
       } else if (_unique.length === 3) {
         // 3 unique tokens: removing the word restructured a whole clause (common for
@@ -1466,6 +1532,13 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   if (!definition && !finalWordTranslation && !hasGermanNounSuffix) {
     definition = await lookupDefinition(word, targetLang, context);
   }
+  // For capitalized proper nouns where GT returned the word unchanged (e.g. "Merz" → "Merz"),
+  // still look up Wikipedia — the name has no translation but may have a definition.
+  // The cognate check above requires ≥6 chars, so short names like "Merz" (4 chars) slip through.
+  if (!definition && isCapitalized && !word.includes(' ') &&
+      finalWordTranslation && finalWordTranslation.toLowerCase().trim() === word.toLowerCase().trim()) {
+    definition = await lookupDefinition(word, targetLang, context);
+  }
 
   // German separable verb detection (Trennbare Verben)
   // Only for German single-word hovers: "bereitet" + "vor" in sentence -> vorbereiten
@@ -1505,6 +1578,45 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
     finalWordTranslation = separableVerb.translation;
     effectiveAlts = [];
     definition = null; // suppress spurious Wikipedia result (looked up before sep-verb was known)
+  }
+
+  // If GT has no dict entry for the word (finalWordTranslation=null) but the sentence diff
+  // extracted a clear single-word translation, use it as the primary translation.
+  // e.g. "Ausländerhass" → GT has no entry → sentenceExtracted="xenofobia" → show "xenofobia"
+  // Without this, translatable=false and content.js shows the full contextTranslation phrase instead.
+  // German participio vs. presente: same verb form in German (e.g. "erwartet" = "espera" OR "esperado").
+  // GT bilingual dict always returns the participio ("esperado") as canonical form.
+  // Rule: if there's NO auxiliary verb (hat/ist/wird/etc.) near the word in the source sentence,
+  // the verb is present tense → prefer sentenceExtracted (which captures the conjugated form).
+  if (pageLang === 'de' && sentence && finalWordTranslation && sentenceExtracted && targetLang === 'es') {
+    // sentenceExtracted may be "le espera" (Spanish clitic + verb) — extract just the verb
+    const SPANISH_CLITICS = new Set(['le','la','lo','les','las','los','se','me','te','nos','os']);
+    let sentExtVerb = sentenceExtracted;
+    if (sentenceExtracted.includes(' ')) {
+      const parts = sentenceExtracted.trim().split(/\s+/);
+      sentExtVerb = (parts.length === 2 && SPANISH_CLITICS.has(parts[0].toLowerCase()))
+        ? parts[1]   // "espera" from "le espera"
+        : null;      // multi-word, can't resolve
+    }
+    if (sentExtVerb) {
+      const isParticipioEs  = /(?:ado|ido|to|so|cho)$/i.test(finalWordTranslation);
+      const sentIsConjugado = !/(?:ado|ido|to|so|cho)$/i.test(sentExtVerb);
+      if (isParticipioEs && sentIsConjugado) {
+        const GERMAN_AUX = /\b(hat|hatte|habe|haben|habt|hätte|hätten|hättest|ist|war|sei|sind|waren|wäre|wären|wärst|wird|wurde|werden|worden|würde|würden|wirst|werdet)\b/i;
+        if (!GERMAN_AUX.test(sentence)) {
+          // No auxiliary → present tense → use conjugated form from sentence diff
+          finalWordTranslation = sentExtVerb;
+          effectiveAlts = [];
+        }
+      }
+    }
+  }
+
+  // If GT has no dict entry (finalWordTranslation=null) but sentence diff extracted a clear
+  // single-word translation, use it as primary (e.g. "Ausländerhass" → "xenofobia").
+  if (!finalWordTranslation && sentenceExtracted && !sentenceExtracted.includes(' ')) {
+    finalWordTranslation = sentenceExtracted;
+    effectiveAlts = [];
   }
 
   const _mainFull = (definition && context) ? extractFullName(word, context) : word;
@@ -1687,10 +1799,25 @@ function extractFullName(word, context) {
     // Extend leftward for up to 2 preceding capitalized tokens (e.g. "Pablo" before "Iglesias")
     // Only when no rightward expansion was found (word looks like a standalone surname).
     if (!name.includes(' ') && idx > 0) {
+      // Title/honorific words that precede a name but are NOT part of it.
+      // e.g. "Kanzler Merz" → extractFullName returns "Merz", not "Kanzler Merz",
+      // so Wikipedia can find "Friedrich Merz" via person-fallback search.
+      const TITLE_WORDS = new Set([
+        'kanzler','bundeskanzler','vizekanzler','präsident','bundespräsident','vizepräsident',
+        'minister','außenminister','innenminister','finanzminister','verteidigungsminister',
+        'bundesminister','staatssekretär','könig','königin','kaiser','kaiserin',
+        'papst','kardinal','bischof','erzbischof','general','admiral','feldmarschall',
+        'oberst','major','professor','prof','doktor','dr','sir','lord','lady',
+        'herr','frau','senator','gouverneur','bürgermeister','premier',
+        'chancellor','president','prime','secretary','mayor','sheikh','emir','sultan',
+        'chef','director','directeur','ceo','cto','cfo',
+      ]);
       const leftParts = [];
       for (let i = idx - 1; i >= 0 && i >= idx - 2; i--) {
         const rawTok = tokens[i];
         const prev = rawTok.replace(/[^a-zA-ZÀ-ɏ-]/g, '');
+        // Stop at known title words — don't include them in the name
+        if (TITLE_WORDS.has(prev.toLowerCase())) break;
         if (prev.length >= 2 &&
             prev[0] === prev[0].toUpperCase() && prev[0] !== prev[0].toLowerCase()) {
           leftParts.unshift(prev);
@@ -1830,14 +1957,79 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
   // For lowercase common words (e.g. "defends"), OpenSearch returns unrelated
   // articles (e.g. "The Defenders" Marvel show) — skip Wikipedia entirely.
   if (isCapitalized) {
+    // German genitive -s: try stripped form ("Deutschlands"→"Deutschland", "Südafrikas"→"Südafrika").
+    // Uses direct fetchWikiSummary only (no OpenSearch) to avoid false positives.
+    // After finding in any language, converts to target language via English bridge.
+    // "Haus"→"Hau", "Paris"→"Pari" → null everywhere → ignored.
+    if (word.endsWith('s') && !word.endsWith('ss') && word.length > 4) {
+      const stripped = word.slice(0, -1);
+      const tryLangs = targetLang && targetLang !== 'en' ? [targetLang, 'en', 'de'] : ['en', 'de'];
+      let strippedWiki = null;
+      let foundLang = null;
+      for (const lang of tryLangs) {
+        const r = await fetchWikiSummary(stripped, lang);
+        if (r) { strippedWiki = r; foundLang = lang; break; }
+      }
+      if (strippedWiki) {
+        const isCabinetList = /\b(shadow cabinet|cabinet|list of|members of|administration|ministry)\b/i.test(strippedWiki.title || '');
+        if (!isCabinetList) {
+          // Convert to target language using Wikipedia langlinks API
+          // e.g. "Germany" (en) → langlinks → "Alemania" (es)
+          // e.g. "Südafrika" (de) → langlinks → "Sudáfrica" (es)
+          if (targetLang && targetLang !== foundLang) {
+            const tlDirect = await fetchWikiSummary(strippedWiki.title, targetLang);
+            if (tlDirect) {
+              strippedWiki = tlDirect;
+            } else {
+              // Use langlinks API: get target-lang title from found article
+              const tlTitle = await fetchWikiLangLink(strippedWiki.title, foundLang, targetLang);
+              if (tlTitle) {
+                const tlR = await fetchWikiSummary(tlTitle, targetLang);
+                if (tlR) strippedWiki = tlR;
+              } else if (foundLang !== 'en') {
+                // Last resort: get en title via langlinks, then get target from en
+                const enTitle = await fetchWikiLangLink(strippedWiki.title, foundLang, 'en');
+                if (enTitle) {
+                  const tlViaEn = await fetchWikiLangLink(enTitle, 'en', targetLang);
+                  if (tlViaEn) {
+                    const tlR = await fetchWikiSummary(tlViaEn, targetLang);
+                    if (tlR) strippedWiki = tlR;
+                  }
+                }
+              }
+            }
+          }
+          const r = [strippedWiki];
+          r.displayName = stripped;
+          return r;
+        }
+      }
+    }
     const wiki = await lookupWikipedia(word, targetLang);
     if (wiki) {
       // If the Wikipedia article title is a name/disambiguation meta-article
       // (e.g. "Reino (Vorname)", "Pablo (disambiguation)"), it describes the word
       // as a name rather than a specific entity — not useful as a definition.
       // Return null so the translation API handles the word instead.
+      // Skip list/cabinet articles that OpenSearch returns for surnames
+      // e.g. "Starmers" → "Starmer shadow cabinet" → wrong; try person search instead
+      const isCabinetOrListArticle = /\b(shadow cabinet|cabinet|list of|members of|administration|ministry)\b/i.test(wiki.title || '');
+      if (isCabinetOrListArticle && !word.includes(' ')) {
+        const personWiki = await lookupWikipediaPersonFallback(word, targetLang);
+        if (personWiki) return [personWiki];
+        return null;
+      }
+
       const isNameOrDisambigArticle = /\s*\((?:Vorname|given name|forename|first name|name|prénom|nome|desambiguación|disambiguation|Begriffsklärung)\)\s*$/i.test(wiki.title || '');
-      if (isNameOrDisambigArticle) return null;
+        if (isNameOrDisambigArticle) {
+        // Disambiguation or name meta-article: try full-text person search before giving up.
+        // e.g. "Merz" → "Merz (disambiguation)" → search → "Friedrich Merz" ✓
+        if (!word.includes(' ')) {
+          const personWiki = await lookupWikipediaPersonFallback(word, targetLang);
+          if (personWiki) return [personWiki];
+        }
+        return null;
+      }
 
       // Check geo/country only in the first sentence of the Wikipedia summary.
       // Geographic articles start with "Country in..." / "Municipality in..." etc.
@@ -1866,6 +2058,14 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
       return [wiki];
     }
   }
+  // Direct Wikipedia lookup found nothing — try full-text person search as fallback.
+  // Handles surnames like "Merz" where Wikipedia has "Friedrich Merz" but no standalone "Merz" article,
+  // and direct lookup (fetchWikiSummary) returns null while the search API finds the person.
+  if (isCapitalized && !word.includes(' ') && word.length >= 3) {
+    const personWiki = await lookupWikipediaPersonFallback(word, targetLang);
+    if (personWiki) return [personWiki];
+  }
+
   // FreeDictionary returns an array of {text, pos} (one per POS)
   if (targetLang === 'en') return lookupFreeDictionary(word);
   return null;
@@ -1887,6 +2087,35 @@ async function lookupWikipediaPersonFallback(word, targetLang) {
   for (const suffix of ['(politician)', '(American politician)']) {
     const r = await fetchBest(`${word} ${suffix}`);
     if (r) return r;
+  }
+  // 1b. German genitive -s strip: "Starmers" → try "Starmer" directly, then via full-text search
+  if (word.endsWith('s') && !word.endsWith('ss') && word.length > 3) {
+    const stripped = word.slice(0, -1);
+    // Direct lookup first
+    const strippedR = await fetchBest(stripped);
+    if (strippedR) {
+      // Keep geo/country results (e.g. "Deutschland" → Germany is valid for "Deutschlands")
+      // Only filter cabinet/list articles (e.g. "Starmer shadow cabinet" for "Starmers")
+      const isCabinetList = /\b(shadow cabinet|cabinet|list of|members of|administration|ministry)\b/i.test(strippedR.title || '');
+      if (!isCabinetList) return strippedR;
+    }
+    // Direct lookup blocked (cabinet/geo) — try full-text search for the stripped form
+    try {
+      const sRes = await fetch(
+        `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(stripped)}&srnamespace=0&srlimit=3&srprop=&format=json&origin=*`
+      );
+      if (sRes.ok) {
+        const sData = await sRes.json();
+        const sHits = (sData?.query?.search || []).map(h => h.title)
+          .filter(t => !/(disambiguation|cabinet|list of|members of)/i.test(t))
+          .filter(t => !/, [A-Z]/.test(t))
+          .filter(t => t.toLowerCase().includes(stripped.toLowerCase()));
+        for (const sTitle of sHits.slice(0, 2)) {
+          const sR = await fetchBest(sTitle);
+          if (sR && !/\b(country|sovereign state|commun[ae])\b/i.test(sR.text)) return sR;
+        }
+      }
+    } catch {}
   }
   // 2. Wikipedia full-text search — finds "JD Vance" for query "Vance"
   try {
@@ -1921,7 +2150,13 @@ async function lookupWikipediaPersonFallback(word, targetLang) {
         // The article title must contain the searched word — otherwise it's a false positive
         // from full-text search (e.g. "European route E5" found because E5 passes through Pissos).
         // Person articles always have the person's name in the title (JD Vance, Donald Trump…).
-        const titleContainsWord = (r.title || '').toLowerCase().includes(word.toLowerCase());
+        // Also accept genitive forms: "Starmers" → check if title contains "starmer"
+        const wordLow = word.toLowerCase();
+        const genitiveStripped = (wordLow.endsWith('s') && !wordLow.endsWith('ss') && wordLow.length > 3)
+          ? wordLow.slice(0, -1) : null;
+        const titleLow = (r.title || '').toLowerCase();
+        const titleContainsWord = titleLow.includes(wordLow) ||
+          (genitiveStripped && titleLow.includes(genitiveStripped));
         if (!isFallbackGeo && !isEventChronicle && titleContainsWord) return r;
       }
     }
@@ -2029,6 +2264,23 @@ async function fetchWikiSummary(title, lang = 'en') {
 
 // Free Dictionary API — English only, used only when target language is English
 // https://dictionaryapi.dev  (free, no key)
+// Given a Wikipedia article title in fromLang, returns the title of the same article
+// in toLang using the Wikipedia langlinks API (e.g., "Germany"→"en"→"es"→"Alemania").
+async function fetchWikiLangLink(title, fromLang, toLang) {
+  try {
+    const res = await fetch(
+      `https://${fromLang}.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(title)}&prop=langlinks&lllang=${toLang}&format=json&origin=*`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const pages = Object.values(data?.query?.pages || {});
+    if (!pages.length) return null;
+    const ll = (pages[0].langlinks || []).find(l => l.lang === toLang);
+    return ll ? ll['*'] : null;
+  } catch { return null; }
+}
+
+
 async function lookupFreeDictionary(word) {
   try {
     const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word.toLowerCase())}`);
