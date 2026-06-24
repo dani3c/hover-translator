@@ -1,5 +1,5 @@
 # Plan Técnico: Hover Translator — Estado actual
-> Última actualización: 2026-06-24 (sesión 2)
+> Última actualización: 2026-06-24 (sesión 3)
 
 ---
 
@@ -61,7 +61,7 @@ keygen.js                       # Script para generar claves premium
 ### Casos especiales
 - **Nombres propios**: detección por señales A (aparece igual en contexto) y B (divergencia de longitud >25%)
 - **Wikipedia**: búsqueda automática para nombres propios, siglas y acrónimos
-- **Acrónimos multiidioma**: tabla hardcodeada (UE, OTAN, ONU, EEUU, IVA...)
+- **Acrónimos multiidioma**: diccionario `MULTILANG_ACRONYMS` con formato `{ wiki, names }` — devuelve el nombre en el idioma destino (ej. "UE" → "EU" en alemán) + definición Wikipedia en inglés. Cubre 30+ siglas en 10 idiomas (UE/EU, ONU/UN, OTAN/NATO, OMS/WHO, FMI/IMF, BCE/ECB, PIB/GDP, IVA/VAT, EEUU/USA, RU/UK, IA/AI, ADN/DNA, VIH/HIV, SIDA/AIDS, CEO, BBC, CNN...)
 - **Verbo separable alemán (Trennbare Verben)**: detecta "bereitet...vor" → vorbereiten, con tabla de ~100 verbos conocidos
 - **Francés l'/d'/j'**: strip del prefijo antes de enviar a la API
 - **Mismo idioma**: detecta si la página ya está en el idioma destino y muestra definición en vez de traducción
@@ -163,6 +163,7 @@ Hay varios scripts Python (`push_*.py`, `fix_*.py`) para aplicar correcciones pu
 - [x] posGroups: muestra TODAS las acepciones para palabras que no sean alemán especial ✅
 - [x] Punto tras dígito en alemán no corta frase ("19. Februar", "19.02") ✅
 - [x] "man", "es" y ~100 palabras funcionales más (de/fr/it/pt/nl) → tabla hardcodeada que bypasea el diff ✅
+- [x] MULTILANG_ACRONYMS migrado a formato `{ wiki, names }` completo — "UE" ahora devuelve `translation: "EU"` (alemán) en vez de null ✅ (sesión 3)
 - [ ] Revisar comportamiento con páginas sin atributo `lang` (pageLang = null)
 - [ ] Mejorar detección de mismo idioma para páginas multilingüe
 - [ ] Afinar chunk alignment para idiomas CJK (chino, japonés, coreano)
