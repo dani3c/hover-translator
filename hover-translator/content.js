@@ -8,6 +8,9 @@
   let tooltip = null;
   let debounceTimer = null;
   let lastWord = null;
+  let translateNonce = 0; // incremented on each translate call; response is discarded if nonce has changed
+  let activeTranslateWord = null; // word currently being fetched; duplicate calls for same word are dropped
+  const displayWordCache = new Map(); // word → displayWord (Map so entries for different words don't evict each other)
   let currentX = 0;
   let currentY = 0;
   let settings = { enabled: true, targetLang: 'es', hoverDelay: 400 };
@@ -355,7 +358,7 @@
       // Extract surrounding context: up to 4 words on each side
       const context = extractContext(text, start, end, wordChar, 2);
       // For German separable verb detection we need the full sentence
-      const sentence = extractSentenceForNode(node);
+      const sentence = extractSentenceForNode(node, word);
 
       return { word, context, sentence };
     } catch {
@@ -416,9 +419,10 @@
   }
 
 
-  // Extract the full text of the nearest block-level ancestor element.
-  // Used for German separable verb detection (bereitet...vor → vorbereiten).
-  function extractSentenceForNode(textNode) {
+  // Extract the sentence containing the hovered word from the nearest block-level ancestor.
+  // Sentence boundaries are detected by sentence-ending punctuation (. ! ?).
+  // Falls back to the full block text (up to 500 chars) if no boundaries are found.
+  function extractSentenceForNode(textNode, word) {
     try {
       const blockTags = new Set(['P','H1','H2','H3','H4','H5','H6','LI','TD','TH',
         'BLOCKQUOTE','DIV','ARTICLE','SECTION','HEADER','FOOTER']);
@@ -428,8 +432,43 @@
         el = el.parentElement;
       }
       if (!el || el === document.body) el = textNode.parentElement;
-      const text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-      return text.length > 0 ? text.substring(0, 500) : null;
+      const fullText = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!fullText) return null;
+
+      // Find the sentence containing the hovered word by scanning for . ! ? boundaries.
+      if (word && word.length > 1) {
+        const wordIdx = fullText.toLowerCase().indexOf(word.toLowerCase());
+        if (wordIdx !== -1) {
+          // Scan backward for the nearest sentence-ending punctuation
+          let sentStart = 0;
+          for (let i = wordIdx - 1; i >= 0; i--) {
+            if (/[.!?]/.test(fullText[i])) {
+              sentStart = i + 1;
+              break;
+            }
+          }
+          // Skip any leading whitespace after the boundary
+          while (sentStart < wordIdx && /\s/.test(fullText[sentStart])) sentStart++;
+
+          // Scan forward for the nearest sentence-ending punctuation
+          let sentEnd = fullText.length;
+          for (let i = wordIdx + word.length; i < fullText.length; i++) {
+            if (/[.!?]/.test(fullText[i])) {
+              sentEnd = i + 1;
+              break;
+            }
+          }
+
+          const sentence = fullText.slice(sentStart, sentEnd).trim();
+          // Sanity check: the extracted sentence should contain the word
+          if (sentence.toLowerCase().includes(word.toLowerCase())) {
+            return sentence.substring(0, 500);
+          }
+        }
+      }
+
+      // Fallback: return full block text
+      return fullText.substring(0, 500);
     } catch {
       return null;
     }
@@ -439,7 +478,12 @@
   // Translation request
   // ---------------------------------------------------------------------------
   async function translate(word, context, sentence, x, y) {
-    showTooltip(word, null, x, y); // show loading state
+    if (activeTranslateWord === word) return; // same word already in flight — let that request finish
+    activeTranslateWord = word;
+    const myNonce = ++translateNonce;
+    // If we already resolved displayWord for this word, keep showing it during reload
+    const knownDisplay = displayWordCache.get(word) || null;
+    showTooltip(knownDisplay || word, null, x, y); // show loading state
 
     try {
       // Detect the page's declared language from the HTML lang attribute.
@@ -459,7 +503,15 @@
         apiKey: settings.apiKey
       });
 
+      if (myNonce !== translateNonce) {
+        // Still cache the displayWord even though we discard this response —
+        // the next translate() for the same word will benefit from the cache.
+        if (response?.displayWord) displayWordCache.set(word, response.displayWord);
+        activeTranslateWord = null;
+        return;
+      } // a newer translate() superseded this one
       if (!response) {
+        activeTranslateWord = null;
         hideTooltip();
         return;
       }
@@ -483,13 +535,24 @@
       const usableContext = response.contextTranslation && !response.sameLanguage;
       const hasContent = response.translation || response.definition || usableContext;
       // Use displayWord if background.js fell back to a shorter word (e.g. "Remember" from "Remember Ebola")
-      const displayWord = response.displayWord || word;
+      // If getWordAtPoint returned a multi-word unit (e.g. "Pablo Iglesias" from a link text node),
+      // use it directly as the display name — background.js strips it to firstWord which is wrong.
+      const displayWord = (word.includes(' ') ? word : null)
+        || response.displayWord
+        || displayWordCache.get(word)
+        || word;
+      if (/^pablo$/i.test(word) || /^iglesias$/i.test(word)) {
+      }
+      activeTranslateWord = null; // request finished — allow future requests for this word
+      // Cache displayWord so loading state for the same word shows the full name immediately
+      if (response.displayWord) displayWordCache.set(word, response.displayWord);
       if (hasContent) {
         showTooltip(displayWord, response.translation, x, y, 'ok', response);
       } else {
         showTooltip(displayWord, null, x, y, 'unknown', response);
       }
     } catch (err) {
+      activeTranslateWord = null;
       // Extension context invalidated (e.g. after reload during dev).
       // Show a soft error so the user knows to reload the tab.
       if (err.message && err.message.includes('Extension context invalidated')) {
@@ -521,6 +584,8 @@
   }
 
   function showTooltip(word, translation, x, y, state = 'loading', meta = {}) {
+    if (/^pablo$/i.test(word) || /^pablo iglesias$/i.test(word)) {
+    }
     const el = getTooltip();
 
     el.className = 'hover-translator-tooltip';
@@ -558,18 +623,11 @@
         </div>
         <div class="ht-body ht-unknown">
           ${isSameLang
-            ? `<span>Text already in target language</span>
-               <a href="#" class="ht-search-link" id="ht-change-lang">⚙ Change language</a>`
+            ? `<span class="ht-same-lang-note">(this page is in your target language)</span>`
             : `<span>Not in database</span>`}
           <a href="${searchUrl}" target="_blank" class="ht-search-link">🔍 Search on Google</a>
         </div>
       `;
-      if (isSameLang) {
-        el.querySelector('#ht-change-lang')?.addEventListener('click', (e) => {
-          e.preventDefault();
-          chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
-        });
-      }
     } else if (state === 'error') {
       el.innerHTML = `
         <div class="ht-header">
@@ -581,7 +639,7 @@
       `;
     } else {
       // ok
-      const { count, limit, isPremium, translatable, definition, contextPhrase, contextTranslation, sentenceTranslation = null, sentenceExtracted = null, sameLanguage, extractedTranslation, alternatives = [], posGroups = [], separableVerb = null } = meta;
+      const { count, limit, isPremium, translatable, definition, contextPhrase, contextTranslation, sentenceTranslation = null, sentMinusTranslation = null, sentenceExtracted = null, sameLanguage, extractedTranslation, alternatives = [], posGroups = [], separableVerb = null, isGermanNoun = false, isGermanPage = false } = meta;
 
       // Premium users see nothing in the header — they already paid, no need to remind them.
       // Free users see their daily count so they know how many words remain.
@@ -638,52 +696,108 @@
         const sentToksLow = sentenceTranslation
           ? (sentenceTranslation.toLowerCase().match(/[\wáéíóúüäöñàèìòùçßÀ-ɏ]+/g) || [])
           : [];
-        const isoConfirmedBySentence = !!(translation &&
-          sentToksLow.some(t => t === translation.toLowerCase().trim()));
+        // isoConfirmedBySentence: the isolated translation appears in the WITH-word sentence
+        // but NOT in the WITHOUT-word sentence → it's genuinely there because of this word.
+        // Without the sentMinus check, common verbs like "conseguir" produce false positives:
+        // they appear in the WITH-word sentence translation by coincidence (e.g. from a nearby
+        // "gewinnen wollte" clause), causing the wrong isolated translation to override sentenceExtracted.
+        const sentMinusToksLow = sentMinusTranslation
+          ? (sentMinusTranslation.toLowerCase().match(/[\wáéíóúüäöñàèìòùçßÀ-ɏ]+/g) || [])
+          : [];
+        // isoConfirmedBySentence: the isolated translation appears in the WITH-word sentence
+        // AND either: (a) we have no minus sentence to compare against, but the translation
+        // also disappears when the word is removed (confirmed by diff), OR (b) the minus
+        // sentence doesn't contain it (so it only appears BECAUSE of this word).
+        // When sentMinusTranslation is null, require extra confirmation via sentenceExtracted.
+        const isoInSentence = !!(translation && sentToksLow.some(t => t === translation.toLowerCase().trim()));
+        const isoInMinus = sentMinusToksLow.length > 0 && sentMinusToksLow.some(t => t === translation.toLowerCase().trim());
+        // Confirmed only when: (appears in sentence) AND (minus is missing → trust only if no sentenceExtracted overrides it, OR minus is present but doesn't have it)
+        const isoConfirmedBySentence = isoInSentence && !isoInMinus && sentMinusToksLow.length > 0;
 
         // Multi-word translations from the bilingual dict are specific and reliable — trust them.
         // e.g. "erneut" → "de nuevo" (pivot): don't override with sentence-diff "vuelve".
         const isMultiWordTranslation = !!(translation && translation.includes(' '));
         // Priority: separableVerb > iso-confirmed-by-sentence | multi-word → sentence-diff > chunk > iso
-        const displayTranslation = (separableVerb?.translation && separableVerb.translation !== translation)
-          ? separableVerb.translation
-          : (isoConfirmedBySentence || isMultiWordTranslation
-              ? translation
-              : (sentenceExtracted && sentenceExtracted.toLowerCase() !== translation.toLowerCase()
-                  ? sentenceExtracted
-                  : (useChunk ? extractedTranslation : translation)));
+        // In German, capitalized words are ALWAYS nouns — if posGroups has noun translations,
+        // use the first one directly, bypassing verb-biased priority chain entirely.
+        const _nounGroups = posGroups.filter(g => /^noun|^sustantivo|^Substantiv/i.test(g.pos));
+        const germanNounOverride = isGermanNoun && _nounGroups.length > 0
+          ? _nounGroups[0].translations[0] : null;
+
+        // German rule: lowercase words are NEVER nouns (German capitalizes ALL nouns).
+        // Defined early — used in both displayTranslation and posGroups filtering below.
+        const _isGermanLower = !isGermanNoun && isGermanPage &&
+          word && word[0] === word[0].toLowerCase();
+
+        const displayTranslation = germanNounOverride ||
+          ((separableVerb?.translation && separableVerb.translation !== translation)
+            ? separableVerb.translation
+            : (isoConfirmedBySentence || isMultiWordTranslation
+                ? translation
+                : (sentenceExtracted && sentenceExtracted.toLowerCase() !== translation.toLowerCase()
+                    // For German lowercase words (verbs/adj/adv), a multi-word sentenceExtracted
+                    // is always a diff artefact (sentence restructuring), never the real translation.
+                    // E.g. removing "kulturelle" leaves "se infraestructura" adjacent in the output
+                    // but the correct translation is simply "cultural" from GT.
+                    && (!_isGermanLower || !sentenceExtracted.includes(' '))
+                    ? sentenceExtracted
+                    : (useChunk ? extractedTranslation : translation))));
 
         // Show word translation + alternatives.
         // When the bilingual dict returns ≥2 POS groups (verb + noun, verb + adj, etc.),
         // display each group on its own line with a small POS chip for clarity.
         // Otherwise fall back to the flat "primary / alt1 / alt2" format.
-        // If any posGroup is a verb, show ONLY verb groups.
-        // Showing noun/adjective/adverb groups alongside verb groups is noisy and misleading
-        // when the hovered word is clearly used as a verb in context.
-        const verbPosGroups = posGroups.filter(g => /^verb/i.test(g.pos));
-        const displayPosGroups = verbPosGroups.length > 0 ? verbPosGroups : posGroups;
+        // POS group display rules:
+        //   • isGermanNoun   → noun groups only (word is always a noun if capitalized in German)
+        //   • _isGermanLower → verb groups only (lowercase words can NEVER be nouns in German)
+        //   • all others     → ALL groups shown, so the user sees every possible meaning
+        const _activePosGroups = (_isGermanLower && posGroups.length > 0)
+          ? posGroups.filter(g => !/^noun|^sustantivo|^Substantiv/i.test(g.pos))
+          : posGroups;
+        const verbPosGroups = _activePosGroups.filter(g => /^verb/i.test(g.pos));
+        const nounPosGroups = _activePosGroups.filter(g => /^noun|^sustantivo|^Substantiv/i.test(g.pos));
+        const displayPosGroups = isGermanNoun
+          // Confirmed German noun → show noun groups only (never verb groups)
+          ? (nounPosGroups.length > 0 ? nounPosGroups : _activePosGroups.filter(g => !/^verb/i.test(g.pos)) || _activePosGroups)
+          : _isGermanLower
+            // German lowercase (verb/adj/adv) → show verb groups only, suppressing any noun leak
+            ? (verbPosGroups.length > 0 ? verbPosGroups : _activePosGroups)
+            // Everything else → show ALL groups so the user sees all possible meanings
+            : _activePosGroups;
+
+        // When the sentence-diff algorithm has extracted a contextual translation
+        // (e.g. 'quiere' for 'wolle'), displayTranslation === sentenceExtracted.
+        // In that case, skip the posGroups template entirely — the extracted word
+        // is more reliable than the dictionary groups (which may be noun-biased).
+        const _sentenceOverride = !!sentenceExtracted &&
+          sentenceExtracted.toLowerCase() !== translation.toLowerCase() &&
+          displayTranslation === sentenceExtracted;
 
         let altsHtml;
-        if (displayPosGroups.length >= 2) {
+        if (!_sentenceOverride && displayPosGroups.length >= 2) {
           const groupsHtml = displayPosGroups.map(({ pos, translations }) =>
             `<div class="ht-pos-group"><span class="ht-pos-label">${escapeHtml(pos)}</span> ${translations.map(escapeHtml).join(' \xb7 ')}</div>`
           ).join('');
           altsHtml = `<div class="ht-pos-groups">${groupsHtml}</div>`;
-        } else if (displayPosGroups.length === 1) {
+        } else if (!_sentenceOverride && displayPosGroups.length === 1) {
           // Single verb group: render inline (no group label needed if only one)
           const { translations } = displayPosGroups[0];
           altsHtml = translations.length > 1
             ? ` <span class="ht-alts">/ ${translations.slice(1).map(escapeHtml).join(' / ')}</span>`
             : '';
         } else {
-          altsHtml = alternatives.length
-            ? ` <span class="ht-alts">/ ${alternatives.map(escapeHtml).join(' / ')}</span>`
+          // Suppress noun alternatives for German lowercase words (verbs/adj can't be nouns in German).
+          // Also suppress all word alternatives when sentence-extracted translation is shown,
+          // since those alts come from the wrong (noun-biased) word lookup.
+          const _filteredAlts = (_isGermanLower || _sentenceOverride) ? [] : alternatives;
+          altsHtml = _filteredAlts.length
+            ? ` <span class="ht-alts">/ ${_filteredAlts.map(escapeHtml).join(' / ')}</span>`
             : '';
         }
         // Show word translation + all alternatives as primary, context as secondary.
         // The user can cross-reference the context sentence if the word translation
         // looks wrong (e.g. a CJK boundary fragment like "榜营" → "golpeando").
-        mainHtml = displayPosGroups.length >= 2
+        mainHtml = (!_sentenceOverride && displayPosGroups.length >= 2)
           ? `<div class="ht-pos-groups-wrap">${altsHtml}</div>`
           : `<span class="ht-translation">${escapeHtml(displayTranslation)}${altsHtml}</span>`;
         // When a Wikipedia definition is also present (e.g. Anthropic → cognate "antrópico"
@@ -743,7 +857,7 @@
 
       // Hint when text is already in the target language
       const sameLangHtml = sameLanguage
-        ? `<div class="ht-same-lang">Text already in target language · <a href="#" class="ht-change-lang">Change ⚙</a></div>`
+        ? `<div class="ht-same-lang">(this page is in your target language)</div>`
         : '';
 
       // If a separable verb was detected, show the full infinitive in the header
@@ -763,12 +877,6 @@
         </div>
       `;
 
-      if (sameLanguage) {
-        el.querySelector('.ht-change-lang')?.addEventListener('click', (e) => {
-          e.preventDefault();
-          chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
-        });
-      }
     }
 
     // Position tooltip
