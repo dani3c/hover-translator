@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Hover Translator",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Instant word translations on hover. Freemium: 100 words/day free, unlimited with Premium.",
   "icons": {
     "16": "icons/icon16.png",
