@@ -1,5 +1,5 @@
 # Plan Técnico: Hover Translator — Estado actual
-> Última actualización: 2026-06-24 (noche)
+> Última actualización: 2026-06-24 (sesión 2)
 
 ---
 
@@ -17,7 +17,7 @@ https://chromewebstore.google.com/detail/hover-translator/pjbgkafflfgaaknaaekbnp
 
 ```
 hover-translator/
-├── manifest.json               # MV3, v1.0.3
+├── manifest.json               # MV3, v1.0.2 (store) / 1.0.3 en desarrollo
 ├── background.js               # Service worker (~2200 líneas): traducción, Wikipedia, caché
 ├── content.js                  # Content script: hover, tooltip, extracción de palabra
 ├── content.css                 # Estilos del tooltip
@@ -91,8 +91,20 @@ El diff compara los tokens de la traducción de la frase CON la palabra vs SIN l
 - **`_sentenceOverride`**: cuando `displayTranslation === sentenceExtracted` (el diff extrajo una traducción mejor), se fuerza el formato plano ignorando los posGroups (que pueden ser sesgados hacia sustantivos).
 - **Multi-word `sentenceExtracted` para `_isGermanLower`**: se ignora (los verbos/adj alemanes siempre se traducen como una sola palabra; un resultado de 2+ palabras es un artefacto de reestructuración).
 
-### Extracción de frase de contexto (v1.0.3)
+### Extracción de frase de contexto (v1.0.3+)
 - `extractSentenceForNode(textNode, word)` ahora extrae la frase acotada por signos de puntuación (. ! ?) alrededor de la palabra, en vez de todo el bloque de texto. Aplica a todos los idiomas.
+- **Excepción alemán (sesión 2)**: un punto tras dígito NO es fin de frase — cubre ordinales (`19. Februar`, `3. Kapitel`) y fechas/decimales (`19.02`, `3.14`). Implementado con helper `isSentenceBoundary(text, i)` que devuelve false cuando el `.` está precedido o seguido de un dígito.
+
+### Tabla de palabras funcionales (sesión 2)
+Palabras cuya eliminación de la frase reestructura la oración, haciendo el diff inútil. Se bypasea todo el pipeline y se devuelve una traducción hardcodeada.
+- **Activa cuando**: target = español (`es`), source = uno de los 5 idiomas soportados.
+- **Idiomas cubiertos**: alemán (40 palabras), francés (20), italiano (20), portugués (18), neerlandés (18).
+- **Categorías mostradas**: `pron.` / `adv.` / `conj.` / `part.` (partículas modales alemanas: halt, mal, eben, wohl).
+- **Alemán**: man, es, sich, einem, einen, etwas, jemand, nichts, auch, noch, schon, nur, sehr, viel, wenig, immer, nie, niemals, jetzt, hier, da, dann, so, wie, wo, wann, warum, halt, mal, eben, wohl, doch, aber, oder, denn, weil, wenn, ob, dass, obwohl, damit, trotzdem, deshalb, deswegen, außerdem.
+- **Francés**: on, y, en, se, dont, rien, aussi, même, encore, déjà, jamais, toujours, très, trop, peu, beaucoup, bien, ne, si, donc, car, pourtant, cependant, or.
+- **Italiano**: si, ci, vi, ne, niente, nulla, qualcosa, qualcuno, già, ancora, sempre, mai, anche, molto, poco, troppo, però, dunque, quindi, poiché, tuttavia, eppure.
+- **Portugués**: se, lhe, lhes, nada, algo, alguém, ninguém, já, ainda, sempre, nunca, também, muito, pouco, mas, pois, porém, contudo, portanto, embora.
+- **Neerlandés**: men, er, zich, iets, iemand, niets, ook, nog, al, heel, erg, weinig, veel, nooit, altijd, maar, dus, want, hoewel, toch.
 
 ### Freemium y licencias
 - **Límite diario**: 100 palabras/día para free, guardado en `chrome.storage.sync` (persiste aunque el usuario desinstale y reinstale Chrome, mientras mantenga su cuenta de Google)
@@ -149,7 +161,8 @@ Hay varios scripts Python (`push_*.py`, `fix_*.py`) para aplicar correcciones pu
 - [x] "Umgeben" → "rodeada" (stem fallback en diff, lostClitic con check de consecutividad) ✅
 - [x] Frase de contexto ahora acotada por puntuación real (. ! ?) ✅
 - [x] posGroups: muestra TODAS las acepciones para palabras que no sean alemán especial ✅
-- [ ] "man" → "hombre" (pronombre indefinido alemán; el diff no puede rescatarlo porque quitar "man" reestructura toda la construcción reflexiva)
+- [x] Punto tras dígito en alemán no corta frase ("19. Februar", "19.02") ✅
+- [x] "man", "es" y ~100 palabras funcionales más (de/fr/it/pt/nl) → tabla hardcodeada que bypasea el diff ✅
 - [ ] Revisar comportamiento con páginas sin atributo `lang` (pageLang = null)
 - [ ] Mejorar detección de mismo idioma para páginas multilingüe
 - [ ] Afinar chunk alignment para idiomas CJK (chino, japonés, coreano)
