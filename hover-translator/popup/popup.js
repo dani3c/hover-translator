@@ -8,6 +8,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const toggleState    = document.getElementById('toggle-state');
   const targetLang     = document.getElementById('target-lang');
   const usageCount     = document.getElementById('usage-count');
+
+  // Version from manifest
+  const extVersion = document.getElementById('ext-version');
+  if (extVersion) extVersion.textContent = 'v' + chrome.runtime.getManifest().version;
   const usageBarFill   = document.getElementById('usage-bar-fill');
   const usageRemaining = document.getElementById('usage-remaining');
   const usageSection   = document.getElementById('usage-section');
