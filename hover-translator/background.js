@@ -390,6 +390,205 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
     : (pageLang || 'auto');
   const targetLang = settings.targetLang || 'es';
 
+  // ── Function words early exit (multi-language) ────────────────────────────
+  // Pronouns, particles and conjunctions whose removal restructures the sentence,
+  // causing the diff pipeline to produce garbage (e.g. "man"→"hombre", "es"→wrong,
+  // French "on"→wrong, Italian "si"→wrong).
+  // We bypass the entire pipeline and return a hardcoded result.
+  // Organised by source language; only fires when target is Spanish (es).
+  // Other target languages fall through to the normal pipeline.
+  {
+    const _normTgt = (targetLang || '').split('-')[0].toLowerCase();
+    const _normSrc = (sourceLang || '').split('-')[0].toLowerCase();
+    const _srcFromPage = (pageLang || '').split('-')[0].toLowerCase();
+    const _effectiveSrc = (_normSrc && _normSrc !== 'auto') ? _normSrc : _srcFromPage;
+
+    if (!word.includes(' ') && _normTgt === 'es' && _effectiveSrc) {
+      // pos: pron=pronombre, adv=adverbio, conj=conjunción, part=partícula
+      const FUNC_WORDS_ES = {
+        'de': {
+          // Pronombres
+          'man':     { t: 'uno',           alts: ['se', 'la gente', 'alguien'],     pos: 'pron.' },
+          'es':      { t: 'ello',          alts: ['hay', 'se'],                      pos: 'pron.' },
+          'sich':    { t: 'se',            alts: ['sí mismo', 'consigo mismo'],      pos: 'pron.' },
+          'einem':   { t: 'a uno',         alts: ['le'],                             pos: 'pron.' },
+          'einen':   { t: 'a uno',         alts: ['lo'],                             pos: 'pron.' },
+          'etwas':   { t: 'algo',          alts: ['alguna cosa'],                    pos: 'pron.' },
+          'jemand':  { t: 'alguien',       alts: ['alguna persona'],                 pos: 'pron.' },
+          'nichts':  { t: 'nada',          alts: [],                                 pos: 'pron.' },
+          // Adverbios
+          'auch':    { t: 'también',       alts: ['además'],                         pos: 'adv.'  },
+          'noch':    { t: 'todavía',       alts: ['aún', 'además'],                  pos: 'adv.'  },
+          'schon':   { t: 'ya',            alts: ['de todas formas'],                pos: 'adv.'  },
+          'nur':     { t: 'solo',          alts: ['únicamente', 'nada más'],         pos: 'adv.'  },
+          'sehr':    { t: 'muy',           alts: ['mucho'],                          pos: 'adv.'  },
+          'viel':    { t: 'mucho',         alts: ['bastante'],                       pos: 'adv.'  },
+          'wenig':   { t: 'poco',          alts: ['escaso'],                         pos: 'adv.'  },
+          'immer':   { t: 'siempre',       alts: ['cada vez'],                       pos: 'adv.'  },
+          'nie':     { t: 'nunca',         alts: ['jamás'],                          pos: 'adv.'  },
+          'niemals': { t: 'nunca',         alts: ['jamás'],                          pos: 'adv.'  },
+          'jetzt':   { t: 'ahora',         alts: ['en este momento'],                pos: 'adv.'  },
+          'hier':    { t: 'aquí',          alts: ['acá'],                            pos: 'adv.'  },
+          'da':      { t: 'ahí',           alts: ['allí', 'entonces', 'ya que'],     pos: 'adv.'  },
+          'dann':    { t: 'entonces',      alts: ['luego', 'después'],               pos: 'adv.'  },
+          'so':      { t: 'así',           alts: ['tan', 'entonces'],                pos: 'adv.'  },
+          'wie':     { t: 'cómo',          alts: ['como', 'cuánto'],                 pos: 'adv.'  },
+          'wo':      { t: 'dónde',         alts: ['donde'],                          pos: 'adv.'  },
+          'wann':    { t: 'cuándo',        alts: ['cuando'],                         pos: 'adv.'  },
+          'warum':   { t: 'por qué',       alts: ['para qué'],                       pos: 'adv.'  },
+          // Partículas modales (muy difíciles para el diff)
+          'halt':    { t: 'simplemente',   alts: ['pues', 'ya'],                     pos: 'part.' },
+          'mal':     { t: 'una vez',       alts: ['por favor', 'alguna vez'],        pos: 'part.' },
+          'eben':    { t: 'justo',         alts: ['precisamente', 'simplemente'],    pos: 'part.' },
+          'wohl':    { t: 'probablemente', alts: ['supongo que', 'seguramente'],     pos: 'part.' },
+          'doch':    { t: 'pero sí',       alts: ['sin embargo', 'de todas formas'], pos: 'part.' },
+          // Conjunciones
+          'aber':    { t: 'pero',          alts: ['sin embargo'],                    pos: 'conj.' },
+          'oder':    { t: 'o',             alts: ['u'],                              pos: 'conj.' },
+          'denn':    { t: 'porque',        alts: ['pues', 'ya que'],                 pos: 'conj.' },
+          'weil':    { t: 'porque',        alts: ['ya que', 'dado que'],             pos: 'conj.' },
+          'wenn':    { t: 'cuando',        alts: ['si'],                             pos: 'conj.' },
+          'ob':      { t: 'si',            alts: ['si acaso'],                       pos: 'conj.' },
+          'dass':    { t: 'que',           alts: [],                                 pos: 'conj.' },
+          'obwohl':  { t: 'aunque',        alts: ['a pesar de que'],                 pos: 'conj.' },
+          'damit':   { t: 'para que',      alts: ['con eso'],                        pos: 'conj.' },
+          'trotzdem':{ t: 'de todas formas',alts: ['sin embargo', 'aun así'],        pos: 'conj.' },
+          'deshalb': { t: 'por eso',       alts: ['por eso mismo'],                  pos: 'conj.' },
+          'deswegen':{ t: 'por eso',       alts: ['por esa razón'],                  pos: 'conj.' },
+          'außerdem':{ t: 'además',        alts: ['por otro lado'],                  pos: 'conj.' },
+        },
+        'fr': {
+          // Pronombres
+          'on':      { t: 'uno',           alts: ['se', 'la gente', 'nosotros'],     pos: 'pron.' },
+          'y':       { t: 'allí',          alts: ['hay', 'ahí'],                     pos: 'pron.' },
+          'en':      { t: 'de ello',       alts: ['en', 'de ahí'],                   pos: 'pron.' },
+          'se':      { t: 'se',            alts: ['sí mismo'],                       pos: 'pron.' },
+          'dont':    { t: 'cuyo',          alts: ['del que', 'de quien'],             pos: 'pron.' },
+          'rien':    { t: 'nada',          alts: [],                                  pos: 'pron.' },
+          // Adverbios
+          'aussi':   { t: 'también',       alts: ['además', 'así que'],              pos: 'adv.'  },
+          'même':    { t: 'mismo',         alts: ['incluso', 'hasta'],               pos: 'adv.'  },
+          'encore':  { t: 'todavía',       alts: ['aún', 'otra vez'],                pos: 'adv.'  },
+          'déjà':    { t: 'ya',            alts: ['alguna vez'],                     pos: 'adv.'  },
+          'jamais':  { t: 'nunca',         alts: ['jamás'],                          pos: 'adv.'  },
+          'toujours':{ t: 'siempre',       alts: ['todavía', 'aún'],                 pos: 'adv.'  },
+          'très':    { t: 'muy',           alts: ['bastante'],                       pos: 'adv.'  },
+          'trop':    { t: 'demasiado',     alts: ['muy'],                            pos: 'adv.'  },
+          'peu':     { t: 'poco',          alts: ['apenas'],                         pos: 'adv.'  },
+          'beaucoup':{ t: 'mucho',         alts: ['bastante'],                       pos: 'adv.'  },
+          'bien':    { t: 'bien',          alts: ['muy', 'bastante'],                pos: 'adv.'  },
+          // Conjunciones / partículas
+          'ne':      { t: 'no',            alts: [],                                  pos: 'part.' },
+          'si':      { t: 'si',            alts: ['sí'],                             pos: 'conj.' },
+          'donc':    { t: 'entonces',      alts: ['por tanto', 'así que'],           pos: 'conj.' },
+          'car':     { t: 'porque',        alts: ['pues', 'ya que'],                 pos: 'conj.' },
+          'pourtant':{ t: 'sin embargo',   alts: ['no obstante', 'aun así'],         pos: 'conj.' },
+          'cependant':{ t: 'sin embargo',  alts: ['no obstante'],                    pos: 'conj.' },
+          'or':      { t: 'ahora bien',    alts: ['pero', 'sin embargo'],            pos: 'conj.' },
+        },
+        'it': {
+          // Pronombres
+          'si':      { t: 'se',            alts: ['uno', 'sí mismo'],                pos: 'pron.' },
+          'ci':      { t: 'nos',           alts: ['allí', 'ahí'],                    pos: 'pron.' },
+          'vi':      { t: 'os',            alts: ['allí', 'ahí'],                    pos: 'pron.' },
+          'ne':      { t: 'de ello',       alts: ['de ahí'],                         pos: 'pron.' },
+          'niente':  { t: 'nada',          alts: [],                                  pos: 'pron.' },
+          'nulla':   { t: 'nada',          alts: [],                                  pos: 'pron.' },
+          'qualcosa':{ t: 'algo',          alts: ['alguna cosa'],                    pos: 'pron.' },
+          'qualcuno':{ t: 'alguien',       alts: ['alguna persona'],                 pos: 'pron.' },
+          // Adverbios
+          'già':     { t: 'ya',            alts: ['antes'],                          pos: 'adv.'  },
+          'ancora':  { t: 'todavía',       alts: ['aún', 'otra vez'],                pos: 'adv.'  },
+          'sempre':  { t: 'siempre',       alts: [],                                  pos: 'adv.'  },
+          'mai':     { t: 'nunca',         alts: ['jamás'],                          pos: 'adv.'  },
+          'anche':   { t: 'también',       alts: ['incluso'],                        pos: 'adv.'  },
+          'molto':   { t: 'muy',           alts: ['mucho'],                          pos: 'adv.'  },
+          'poco':    { t: 'poco',          alts: ['apenas'],                         pos: 'adv.'  },
+          'troppo':  { t: 'demasiado',     alts: ['muy'],                            pos: 'adv.'  },
+          // Conjunciones
+          'però':    { t: 'pero',          alts: ['sin embargo'],                    pos: 'conj.' },
+          'dunque':  { t: 'entonces',      alts: ['por tanto'],                      pos: 'conj.' },
+          'quindi':  { t: 'entonces',      alts: ['por tanto', 'así que'],           pos: 'conj.' },
+          'poiché':  { t: 'porque',        alts: ['ya que', 'dado que'],             pos: 'conj.' },
+          'tuttavia':{ t: 'sin embargo',   alts: ['no obstante', 'aun así'],         pos: 'conj.' },
+          'eppure':  { t: 'sin embargo',   alts: ['aun así'],                        pos: 'conj.' },
+        },
+        'pt': {
+          // Pronombres
+          'se':      { t: 'se',            alts: ['sí mismo'],                       pos: 'pron.' },
+          'lhe':     { t: 'le',            alts: ['os'],                             pos: 'pron.' },
+          'lhes':    { t: 'les',           alts: [],                                  pos: 'pron.' },
+          'nada':    { t: 'nada',          alts: [],                                  pos: 'pron.' },
+          'algo':    { t: 'algo',          alts: [],                                  pos: 'pron.' },
+          'alguém':  { t: 'alguien',       alts: [],                                  pos: 'pron.' },
+          'ninguém': { t: 'nadie',         alts: [],                                  pos: 'pron.' },
+          // Adverbios
+          'já':      { t: 'ya',            alts: [],                                  pos: 'adv.'  },
+          'ainda':   { t: 'todavía',       alts: ['aún'],                            pos: 'adv.'  },
+          'sempre':  { t: 'siempre',       alts: [],                                  pos: 'adv.'  },
+          'nunca':   { t: 'nunca',         alts: ['jamás'],                          pos: 'adv.'  },
+          'também':  { t: 'también',       alts: ['además'],                         pos: 'adv.'  },
+          'muito':   { t: 'muy',           alts: ['mucho'],                          pos: 'adv.'  },
+          'pouco':   { t: 'poco',          alts: [],                                  pos: 'adv.'  },
+          // Conjunciones
+          'mas':     { t: 'pero',          alts: ['sin embargo'],                    pos: 'conj.' },
+          'pois':    { t: 'porque',        alts: ['pues', 'ya que'],                 pos: 'conj.' },
+          'porém':   { t: 'sin embargo',   alts: ['no obstante'],                    pos: 'conj.' },
+          'contudo': { t: 'sin embargo',   alts: ['no obstante', 'aun así'],         pos: 'conj.' },
+          'portanto':{ t: 'por tanto',     alts: ['entonces', 'así que'],            pos: 'conj.' },
+          'embora':  { t: 'aunque',        alts: ['a pesar de que'],                 pos: 'conj.' },
+        },
+        'nl': {
+          // Pronombres
+          'men':     { t: 'uno',           alts: ['se', 'la gente'],                 pos: 'pron.' },
+          'er':      { t: 'allí',          alts: ['hay', 'ello'],                    pos: 'pron.' },
+          'zich':    { t: 'se',            alts: ['sí mismo'],                       pos: 'pron.' },
+          'iets':    { t: 'algo',          alts: [],                                  pos: 'pron.' },
+          'iemand':  { t: 'alguien',       alts: [],                                  pos: 'pron.' },
+          'niets':   { t: 'nada',          alts: [],                                  pos: 'pron.' },
+          // Adverbios
+          'ook':     { t: 'también',       alts: ['además'],                         pos: 'adv.'  },
+          'nog':     { t: 'todavía',       alts: ['aún', 'además'],                  pos: 'adv.'  },
+          'al':      { t: 'ya',            alts: ['todos'],                           pos: 'adv.'  },
+          'heel':    { t: 'muy',           alts: ['bastante'],                       pos: 'adv.'  },
+          'erg':     { t: 'muy',           alts: ['bastante'],                       pos: 'adv.'  },
+          'weinig':  { t: 'poco',          alts: [],                                  pos: 'adv.'  },
+          'veel':    { t: 'mucho',         alts: ['bastante'],                       pos: 'adv.'  },
+          'nooit':   { t: 'nunca',         alts: ['jamás'],                          pos: 'adv.'  },
+          'altijd':  { t: 'siempre',       alts: [],                                  pos: 'adv.'  },
+          // Conjunciones
+          'maar':    { t: 'pero',          alts: ['sin embargo', 'solo'],            pos: 'conj.' },
+          'dus':     { t: 'entonces',      alts: ['por tanto'],                      pos: 'conj.' },
+          'want':    { t: 'porque',        alts: ['pues'],                           pos: 'conj.' },
+          'hoewel':  { t: 'aunque',        alts: ['a pesar de que'],                 pos: 'conj.' },
+          'toch':    { t: 'sin embargo',   alts: ['de todas formas', 'aun así'],     pos: 'conj.' },
+        },
+      };
+
+      const _langWords = FUNC_WORDS_ES[_effectiveSrc];
+      if (_langWords) {
+        const _entry = _langWords[word.toLowerCase()];
+        if (_entry) {
+          return {
+            translation: _entry.t,
+            alternatives: _entry.alts,
+            translatable: true,
+            sameLanguage: false,
+            definition: null,
+            extractedTranslation: null,
+            contextPhrase: context || null,
+            contextTranslation: null,
+            sentenceTranslation: null,
+            sentenceExtracted: null,
+            posGroups: [{ pos: _entry.pos, translations: [_entry.t, ..._entry.alts] }],
+            isGermanPage: _effectiveSrc === 'de',
+            isGermanNoun: false,
+          };
+        }
+      }
+    }
+  }
+
   // Multi-word capitalized phrases in Title Case ("Lionel Messi", "Donald Trump", "New York")
   // are proper nouns assembled by content.js — translating them gives wrong results.
   // Exception: ALL-CAPS phrases ("JUST NU", "BREAKING NEWS") are headline labels, not names —
