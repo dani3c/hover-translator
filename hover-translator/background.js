@@ -597,24 +597,75 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
 
   // Hardcoded table for common non-English acronyms that Wikipedia search misidentifies.
   // Defined here (top of function) so both isSingleAcronym and isMultiWordProperNoun can use it.
+  // Format: { wiki: 'English Wikipedia title', names: { de, en, fr, es, it, pt, nl, sv, pl, ro } }
+  // Always fetch wiki from English Wikipedia (en) — non-English titles differ per language.
   const MULTILANG_ACRONYMS = {
-    'UE': 'European Union',       // es/fr/it/pt: Unión/Union Européenne/EU
-    'ONU': 'United Nations',      // es/fr/it/pt: ONU
-    'OTAN': 'NATO',               // es/fr: Organización del Tratado del Atlántico Norte
-    'OMS': 'World Health Organization', // es/fr: OMS
-    'FMI': 'International Monetary Fund', // es/fr/it: FMI
-    'BCE': 'European Central Bank', // es/fr: Banco/Banque Centrale Européenne
-    'PIB': 'Gross domestic product', // es/fr/it/pt: PIB
-    'PNB': 'Gross national product', // es/fr
-    'BM': 'World Bank',           // es/fr: Banco/Banque Mondiale
-    'UME': 'Eurozone',            // es: Unión Monetaria Europea
-    'EEUU': 'United States',      // es: Estados Unidos
-    'EUA': 'United States',       // es/pt: Estados Unidos de América
-    'RU': 'United Kingdom',       // es: Reino Unido
-    'FF': 'French franc',         // historical
-    'DM': 'Deutsche Mark',        // historical
-    'IVA': 'Value-added tax',     // es/it/pt: Impuesto sobre el Valor Añadido
-    'DNI': 'National identity card', // es: Documento Nacional de Identidad
+    // ── European Union ──
+    'UE':   { wiki: 'European Union',              names: { de: 'EU',         en: 'EU',          fr: 'UE',         es: 'UE',    it: 'UE',    pt: 'UE',    nl: 'EU',      sv: 'EU',          pl: 'UE',    ro: 'UE'  } },
+    'EU':   { wiki: 'European Union',              names: { de: 'EU',         en: 'EU',          fr: 'UE',         es: 'UE',    it: 'UE',    pt: 'UE',    nl: 'EU',      sv: 'EU',          pl: 'UE',    ro: 'UE'  } },
+    // ── United Nations ──
+    'ONU':  { wiki: 'United Nations',              names: { de: 'UNO',        en: 'UN',          fr: 'ONU',        es: 'ONU',   it: 'ONU',   pt: 'ONU',   nl: 'VN',      sv: 'FN',          pl: 'ONZ',   ro: 'ONU' } },
+    'UN':   { wiki: 'United Nations',              names: { de: 'UNO',        en: 'UN',          fr: 'ONU',        es: 'ONU',   it: 'ONU',   pt: 'ONU',   nl: 'VN',      sv: 'FN',          pl: 'ONZ',   ro: 'ONU' } },
+    'UNO':  { wiki: 'United Nations',              names: { de: 'UNO',        en: 'UN',          fr: 'ONU',        es: 'ONU',   it: 'ONU',   pt: 'ONU',   nl: 'VN',      sv: 'FN',          pl: 'ONZ',   ro: 'ONU' } },
+    // ── NATO ──
+    'OTAN': { wiki: 'NATO',                        names: { de: 'NATO',       en: 'NATO',        fr: 'OTAN',       es: 'OTAN',  it: 'NATO',  pt: 'NATO',  nl: 'NAVO',    sv: 'NATO',        pl: 'NATO',  ro: 'NATO'} },
+    'NATO': { wiki: 'NATO',                        names: { de: 'NATO',       en: 'NATO',        fr: 'OTAN',       es: 'OTAN',  it: 'NATO',  pt: 'NATO',  nl: 'NAVO',    sv: 'NATO',        pl: 'NATO',  ro: 'NATO'} },
+    'NAVO': { wiki: 'NATO',                        names: { de: 'NATO',       en: 'NATO',        fr: 'OTAN',       es: 'OTAN',  it: 'NATO',  pt: 'NATO',  nl: 'NAVO',    sv: 'NATO',        pl: 'NATO',  ro: 'NATO'} },
+    // ── World Health Organization ──
+    'OMS':  { wiki: 'World Health Organization',   names: { de: 'WHO',        en: 'WHO',         fr: 'OMS',        es: 'OMS',   it: 'OMS',   pt: 'OMS',   nl: 'WHO',     sv: 'WHO',         pl: 'WHO',   ro: 'OMS' } },
+    'WHO':  { wiki: 'World Health Organization',   names: { de: 'WHO',        en: 'WHO',         fr: 'OMS',        es: 'OMS',   it: 'OMS',   pt: 'OMS',   nl: 'WHO',     sv: 'WHO',         pl: 'WHO',   ro: 'OMS' } },
+    // ── International Monetary Fund ──
+    'FMI':  { wiki: 'International Monetary Fund', names: { de: 'IWF',        en: 'IMF',         fr: 'FMI',        es: 'FMI',   it: 'FMI',   pt: 'FMI',   nl: 'IMF',     sv: 'IMF',         pl: 'MFW',   ro: 'FMI' } },
+    'IMF':  { wiki: 'International Monetary Fund', names: { de: 'IWF',        en: 'IMF',         fr: 'FMI',        es: 'FMI',   it: 'FMI',   pt: 'FMI',   nl: 'IMF',     sv: 'IMF',         pl: 'MFW',   ro: 'FMI' } },
+    'IWF':  { wiki: 'International Monetary Fund', names: { de: 'IWF',        en: 'IMF',         fr: 'FMI',        es: 'FMI',   it: 'FMI',   pt: 'FMI',   nl: 'IMF',     sv: 'IMF',         pl: 'MFW',   ro: 'FMI' } },
+    // ── European Central Bank ──
+    'BCE':  { wiki: 'European Central Bank',       names: { de: 'EZB',        en: 'ECB',         fr: 'BCE',        es: 'BCE',   it: 'BCE',   pt: 'BCE',   nl: 'ECB',     sv: 'ECB',         pl: 'EBC',   ro: 'BCE' } },
+    'ECB':  { wiki: 'European Central Bank',       names: { de: 'EZB',        en: 'ECB',         fr: 'BCE',        es: 'BCE',   it: 'BCE',   pt: 'BCE',   nl: 'ECB',     sv: 'ECB',         pl: 'EBC',   ro: 'BCE' } },
+    'EZB':  { wiki: 'European Central Bank',       names: { de: 'EZB',        en: 'ECB',         fr: 'BCE',        es: 'BCE',   it: 'BCE',   pt: 'BCE',   nl: 'ECB',     sv: 'ECB',         pl: 'EBC',   ro: 'BCE' } },
+    // ── GDP / PIB ──
+    'PIB':  { wiki: 'Gross domestic product',      names: { de: 'BIP',        en: 'GDP',         fr: 'PIB',        es: 'PIB',   it: 'PIL',   pt: 'PIB',   nl: 'bbp',     sv: 'BNP',         pl: 'PKB',   ro: 'PIB' } },
+    'PIL':  { wiki: 'Gross domestic product',      names: { de: 'BIP',        en: 'GDP',         fr: 'PIB',        es: 'PIB',   it: 'PIL',   pt: 'PIB',   nl: 'bbp',     sv: 'BNP',         pl: 'PKB',   ro: 'PIB' } },
+    'GDP':  { wiki: 'Gross domestic product',      names: { de: 'BIP',        en: 'GDP',         fr: 'PIB',        es: 'PIB',   it: 'PIL',   pt: 'PIB',   nl: 'bbp',     sv: 'BNP',         pl: 'PKB',   ro: 'PIB' } },
+    'BIP':  { wiki: 'Gross domestic product',      names: { de: 'BIP',        en: 'GDP',         fr: 'PIB',        es: 'PIB',   it: 'PIL',   pt: 'PIB',   nl: 'bbp',     sv: 'BNP',         pl: 'PKB',   ro: 'PIB' } },
+    // ── GNP / PNB ──
+    'PNB':  { wiki: 'Gross national product',      names: { de: 'BSP',        en: 'GNP',         fr: 'PNB',        es: 'PNB',   it: 'PNL',   pt: 'PNB',   nl: 'BNP',     sv: 'BNI',         pl: 'PNB' } },
+    'GNP':  { wiki: 'Gross national product',      names: { de: 'BSP',        en: 'GNP',         fr: 'PNB',        es: 'PNB',   it: 'PNL',   pt: 'PNB',   nl: 'BNP',     sv: 'BNI',         pl: 'PNB' } },
+    // ── World Bank ──
+    'BM':   { wiki: 'World Bank',                  names: { de: 'Weltbank',   en: 'World Bank',  fr: 'BM',         es: 'BM',    it: 'BM',    pt: 'BM',    nl: 'Wereldbank', sv: 'Världsbanken', pl: 'Bank Światowy' } },
+    // ── Eurozone ──
+    'UME':  { wiki: 'Eurozone',                    names: { de: 'Eurozone',   en: 'Eurozone',    fr: 'Zone euro',  es: 'UME',   it: 'UEM',   pt: 'UME',   nl: 'Eurozone', sv: 'Euroområdet' } },
+    // ── United States ──
+    'EEUU': { wiki: 'United States',               names: { de: 'USA',        en: 'USA',         fr: 'États-Unis', es: 'EEUU',  it: 'USA',   pt: 'EUA',   nl: 'VS',      sv: 'USA',         pl: 'USA',   ro: 'SUA' } },
+    'EUA':  { wiki: 'United States',               names: { de: 'USA',        en: 'USA',         fr: 'États-Unis', es: 'EEUU',  it: 'USA',   pt: 'EUA',   nl: 'VS',      sv: 'USA',         pl: 'USA',   ro: 'SUA' } },
+    'USA':  { wiki: 'United States',               names: { de: 'USA',        en: 'USA',         fr: 'États-Unis', es: 'EEUU',  it: 'USA',   pt: 'EUA',   nl: 'VS',      sv: 'USA',         pl: 'USA',   ro: 'SUA' } },
+    // ── United Kingdom ──
+    'RU':   { wiki: 'United Kingdom',              names: { de: 'UK',         en: 'UK',          fr: 'RU',         es: 'RU',    it: 'UK',    pt: 'RU',    nl: 'VK',      sv: 'UK',          pl: 'UK',    ro: 'RU'  } },
+    'UK':   { wiki: 'United Kingdom',              names: { de: 'UK',         en: 'UK',          fr: 'RU',         es: 'RU',    it: 'UK',    pt: 'RU',    nl: 'VK',      sv: 'UK',          pl: 'UK',    ro: 'RU'  } },
+    // ── VAT / IVA ──
+    'IVA':  { wiki: 'Value-added tax',             names: { de: 'MwSt.',      en: 'VAT',         fr: 'TVA',        es: 'IVA',   it: 'IVA',   pt: 'IVA',   nl: 'btw',     sv: 'moms',        pl: 'VAT',   ro: 'TVA' } },
+    'TVA':  { wiki: 'Value-added tax',             names: { de: 'MwSt.',      en: 'VAT',         fr: 'TVA',        es: 'IVA',   it: 'IVA',   pt: 'IVA',   nl: 'btw',     sv: 'moms',        pl: 'VAT',   ro: 'TVA' } },
+    'VAT':  { wiki: 'Value-added tax',             names: { de: 'MwSt.',      en: 'VAT',         fr: 'TVA',        es: 'IVA',   it: 'IVA',   pt: 'IVA',   nl: 'btw',     sv: 'moms',        pl: 'VAT',   ro: 'TVA' } },
+    // ── DNA / ADN ──
+    'ADN':  { wiki: 'DNA',                         names: { de: 'DNS',        en: 'DNA',         fr: 'ADN',        es: 'ADN',   it: 'DNA',   pt: 'ADN',   nl: 'DNA',     sv: 'DNA',         pl: 'DNA' } },
+    'ARN':  { wiki: 'RNA',                         names: { de: 'RNS',        en: 'RNA',         fr: 'ARN',        es: 'ARN',   it: 'RNA',   pt: 'ARN',   nl: 'RNA',     sv: 'RNA',         pl: 'RNA' } },
+    // ── HIV / AIDS ──
+    'VIH':  { wiki: 'HIV',                         names: { de: 'HIV',        en: 'HIV',         fr: 'VIH',        es: 'VIH',   it: 'HIV',   pt: 'VIH',   nl: 'HIV',     sv: 'HIV',         pl: 'HIV' } },
+    'SIDA': { wiki: 'HIV/AIDS',                    names: { de: 'AIDS',       en: 'AIDS',        fr: 'SIDA',       es: 'SIDA',  it: 'AIDS',  pt: 'SIDA',  nl: 'aids',    sv: 'aids',        pl: 'AIDS' } },
+    // ── AI / IA ──
+    'IA':   { wiki: 'Artificial intelligence',     names: { de: 'KI',         en: 'AI',          fr: 'IA',         es: 'IA',    it: 'IA',    pt: 'IA',    nl: 'AI',      sv: 'AI',          pl: 'AI',    ro: 'IA'  } },
+    'AI':   { wiki: 'Artificial intelligence',     names: { de: 'KI',         en: 'AI',          fr: 'IA',         es: 'IA',    it: 'IA',    pt: 'IA',    nl: 'AI',      sv: 'AI',          pl: 'AI',    ro: 'IA'  } },
+    'KI':   { wiki: 'Artificial intelligence',     names: { de: 'KI',         en: 'AI',          fr: 'IA',         es: 'IA',    it: 'IA',    pt: 'IA',    nl: 'AI',      sv: 'AI',          pl: 'AI',    ro: 'IA'  } },
+    // ── Identity documents ──
+    'DNI':  { wiki: 'National identity card',      names: { de: 'Personalausweis', en: 'ID card', fr: "carte d'identit\u00e9", es: 'DNI', it: 'carta d\u2019identit\u00e0', pt: 'bilhete de identidade' } },
+    'NIE':  { wiki: 'Número de identificación de extranjero', names: { de: 'NIE', en: 'NIE', fr: 'NIE', es: 'NIE' } },
+    // ── Media ──
+    'BBC':  { wiki: 'BBC',                         names: { de: 'BBC',        en: 'BBC',         fr: 'BBC',        es: 'BBC',   it: 'BBC',   pt: 'BBC',   nl: 'BBC',     sv: 'BBC',         pl: 'BBC' } },
+    'CNN':  { wiki: 'CNN',                         names: { de: 'CNN',        en: 'CNN',         fr: 'CNN',        es: 'CNN',   it: 'CNN',   pt: 'CNN',   nl: 'CNN',     sv: 'CNN',         pl: 'CNN' } },
+    // ── CEO ──
+    'CEO':  { wiki: 'Chief executive officer',     names: { de: 'CEO',        en: 'CEO',         fr: 'PDG',        es: 'CEO',   it: 'CEO',   pt: 'CEO',   nl: 'CEO',     sv: 'VD',          pl: 'CEO' } },
+    // ── Historical currencies ──
+    'FF':   { wiki: 'French franc',                names: { de: 'FF',         en: 'FF',          fr: 'FF',         es: 'FF' } },
+    'DM':   { wiki: 'Deutsche Mark',               names: { de: 'DM',         en: 'DM',          fr: 'DM',         es: 'DM' } },
   };
   // All-caps multi-word (e.g. "REINO UNIDO") are also proper nouns — normalize for lookup.
   const isMultiWordProperNoun = word.includes(' ') &&
