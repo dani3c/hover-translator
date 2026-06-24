@@ -1,0 +1,16 @@
+# Secrets — NEVER commit
+license-worker/SECRETS.md
+
+# ZIP releases (subir por separado a Chrome Web Store)
+*.zip
+
+# Python scripts de deploy (opcionales, contienen historial de fixes)
+push_*.py
+fix_*.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
