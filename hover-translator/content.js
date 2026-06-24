@@ -436,13 +436,27 @@
       if (!fullText) return null;
 
       // Find the sentence containing the hovered word by scanning for . ! ? boundaries.
+      // A period is NOT a sentence boundary if:
+      //   - preceded by a digit: German ordinals ("19. Februar", "3. Kapitel")
+      //   - followed by a digit: dates/decimals ("19.02", "3.14")
+      const isSentenceBoundary = (text, i) => {
+        const ch = text[i];
+        if (ch === '!' || ch === '?') return true;
+        if (ch === '.') {
+          if (i > 0 && /\d/.test(text[i - 1])) return false;   // ordinal/decimal
+          if (i + 1 < text.length && /\d/.test(text[i + 1])) return false; // date
+          return true;
+        }
+        return false;
+      };
+
       if (word && word.length > 1) {
         const wordIdx = fullText.toLowerCase().indexOf(word.toLowerCase());
         if (wordIdx !== -1) {
           // Scan backward for the nearest sentence-ending punctuation
           let sentStart = 0;
           for (let i = wordIdx - 1; i >= 0; i--) {
-            if (/[.!?]/.test(fullText[i])) {
+            if (isSentenceBoundary(fullText, i)) {
               sentStart = i + 1;
               break;
             }
@@ -453,7 +467,7 @@
           // Scan forward for the nearest sentence-ending punctuation
           let sentEnd = fullText.length;
           for (let i = wordIdx + word.length; i < fullText.length; i++) {
-            if (/[.!?]/.test(fullText[i])) {
+            if (isSentenceBoundary(fullText, i)) {
               sentEnd = i + 1;
               break;
             }
