@@ -4,6 +4,10 @@
 
 const HMAC_SECRET = '4b3513210b5222f854582282135d18e17aa7fd6d4f997801414a4565069ef503';
 
+// URL del Cloudflare Worker de licencias.
+// Actualiza esto con tu worker URL real (visible en el Cloudflare dashboard).
+const LICENSE_WORKER_URL = 'https://hover-translator-licenses.daniel-marina.workers.dev';
+
 const FREE_DAILY_LIMIT = 100;
 
 // Cache version — bump this whenever extraction logic changes to invalidate stale entries.
@@ -253,7 +257,6 @@ async function findSeparableVerb(word, sentence, targetLang) {
   const knownVerb = GERMAN_SEP_VERB_TRANSLATIONS[infinitive];
   if (knownVerb) {
     const translation = knownVerb[targetLang] || knownVerb['en'];
-    console.log('[HT-sep-dict]', infinitive, '→', translation);
     return { infinitive, translation };
   }
 
@@ -266,7 +269,6 @@ async function findSeparableVerb(word, sentence, targetLang) {
   try {
     enResult = await callGoogleTranslate(infinitive, 'de', 'en', false);
   } catch {
-    console.log('[HT-sep3] GT threw exception for', infinitive);
     return null;
   }
   if (!enResult?.text) return null;
@@ -393,10 +395,61 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   // Exception: ALL-CAPS phrases ("JUST NU", "BREAKING NEWS") are headline labels, not names —
   // they must be translated normally.
   const isAllCaps = word === word.toUpperCase() && /[A-ZÀ-Ö]/.test(word);
+
+  // Hardcoded table for common non-English acronyms that Wikipedia search misidentifies.
+  // Defined here (top of function) so both isSingleAcronym and isMultiWordProperNoun can use it.
+  const MULTILANG_ACRONYMS = {
+    'UE': 'European Union',       // es/fr/it/pt: Unión/Union Européenne/EU
+    'ONU': 'United Nations',      // es/fr/it/pt: ONU
+    'OTAN': 'NATO',               // es/fr: Organización del Tratado del Atlántico Norte
+    'OMS': 'World Health Organization', // es/fr: OMS
+    'FMI': 'International Monetary Fund', // es/fr/it: FMI
+    'BCE': 'European Central Bank', // es/fr: Banco/Banque Centrale Européenne
+    'PIB': 'Gross domestic product', // es/fr/it/pt: PIB
+    'PNB': 'Gross national product', // es/fr
+    'BM': 'World Bank',           // es/fr: Banco/Banque Mondiale
+    'UME': 'Eurozone',            // es: Unión Monetaria Europea
+    'EEUU': 'United States',      // es: Estados Unidos
+    'EUA': 'United States',       // es/pt: Estados Unidos de América
+    'RU': 'United Kingdom',       // es: Reino Unido
+    'FF': 'French franc',         // historical
+    'DM': 'Deutsche Mark',        // historical
+    'IVA': 'Value-added tax',     // es/it/pt: Impuesto sobre el Valor Añadido
+    'DNI': 'National identity card', // es: Documento Nacional de Identidad
+  };
+  // All-caps multi-word (e.g. "REINO UNIDO") are also proper nouns — normalize for lookup.
   const isMultiWordProperNoun = word.includes(' ') &&
-    word[0] === word[0].toUpperCase() && word[0] !== word[0].toLowerCase() &&
-    !isAllCaps;
+    word[0] === word[0].toUpperCase() && word[0] !== word[0].toLowerCase();
   if (isMultiWordProperNoun) {
+    // Strip common leading articles ("La UE" → "UE", "El Niño" → "Niño") and
+    // process the core. Avoids "La UE" being looked up as a proper name.
+    const articleStripMatch = word.match(/^(?:la|el|los|las|le|les|the|gli|il|lo|i|un|una|une|ein|eine|der|die|das)\s+(.+)$/i);
+    if (articleStripMatch) {
+      const coreWord = articleStripMatch[1];
+      // If core is a known multilingual acronym, return it directly
+      const coreAcronymEntry = MULTILANG_ACRONYMS[coreWord.toUpperCase()];
+      if (coreAcronymEntry) {
+        const wikiTitle = coreAcronymEntry.wiki || coreAcronymEntry;
+        const targetName = (coreAcronymEntry.names || {})[targetLang] || (coreAcronymEntry.names || {}).en || null;
+        const r = await fetchWikiSummary(wikiTitle, 'en');
+        return {
+          translation: targetName, alternatives: [], translatable: !!targetName, sameLanguage: false,
+          definition: r ? [r] : null,
+          extractedTranslation: null,
+          contextPhrase: context || null, contextTranslation: null,
+          sentenceTranslation: null, sentenceExtracted: null
+        };
+      }
+      // Otherwise, look up the core word without the article
+      const coreDef = await lookupDefinition(coreWord, targetLang, context);
+      if (coreDef) return {
+        translation: null, alternatives: [], translatable: false, sameLanguage: false,
+        definition: coreDef,
+        extractedTranslation: null,
+        contextPhrase: context || null, contextTranslation: null,
+        sentenceTranslation: null, sentenceExtracted: null
+      };
+    }
     const definition = await lookupDefinition(word, targetLang, context);
     if (definition) {
       return {
@@ -409,14 +462,18 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
         sentenceExtracted: null
       };
     }
-    // Wikipedia found nothing for the compound phrase — the assembly was likely wrong
-    // (e.g. content.js grabbed "Remember Ebola" when only "Ebola" is the proper noun).
-    // Fall back to translating the first word alone so common words like "Remember"
-    // still produce a translation ("recordar") rather than "Not in database".
-    // Include displayWord so content.js shows just "Remember" not "Remember Ebola".
-    const firstWord = word.split(/\s+/)[0];
-    const fallbackResult = await callProviderWithContext(firstWord, context, settings, pageLang);
-    return { ...fallbackResult, displayWord: firstWord };
+    // definition=null: geo/country name — translate the phrase directly.
+    // Use lowercase + no context to bypass the isMultiWordProperNoun guard above
+    // and avoid infinite recursion. MT engines handle "reino unido" → "Vereinigtes Königreich".
+    const lowerPhrase = word.toLowerCase();
+    const fullResult = await callProviderWithContext(lowerPhrase, null, settings, pageLang);
+    if (fullResult && fullResult.translation) {
+      return { ...fullResult, displayWord: word };
+    }
+    // Last resort: translate just the first word.
+    const firstWord = word.split(/\s+/)[0].toLowerCase();
+    const fallbackResult = await callProviderWithContext(firstWord, null, settings, pageLang);
+    return { ...fallbackResult, displayWord: word };
   }
 
   // ── Same-language early exit ────────────────────────────────────────────────
@@ -458,6 +515,40 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
     (isAllCaps && /^[A-ZÀ-Ö]+$/.test(word) && word.length >= 2) || isDottedAbbrev
   );
   if (isSingleAcronym) {
+    const multiEntry = MULTILANG_ACRONYMS[word.toUpperCase()];
+    if (multiEntry) {
+      const wikiTitle = multiEntry.wiki || multiEntry;
+      const targetName = (multiEntry.names || {})[targetLang] || (multiEntry.names || {}).en || null;
+      const overrideResult = await fetchWikiSummary(wikiTitle, 'en');
+      return {
+        translation: targetName, alternatives: [], translatable: !!targetName, sameLanguage: false,
+        definition: overrideResult ? [overrideResult] : null,
+        extractedTranslation: null,
+        contextPhrase: context || null,
+        contextTranslation: null,
+        sentenceTranslation: null,
+        sentenceExtracted: null
+      };
+    }
+
+    // For 2-3 letter ALL-CAPS acronyms, run context-aware search FIRST.
+    // lookupDefinition may find a wrong article (e.g. "Project Management" for "PM")
+    // before the context-aware search gets a chance to find "Prime Minister".
+    if (/^[A-Z]{2,3}$/.test(word)) {
+      const acronymSearch = await lookupWikipediaAcronymSearch(word, context, targetLang);
+      if (acronymSearch) {
+        return {
+          translation: null, alternatives: [], translatable: false, sameLanguage: false,
+          definition: [acronymSearch],
+          extractedTranslation: null,
+          contextPhrase: context || null,
+          contextTranslation: null,
+          sentenceTranslation: null,
+          sentenceExtracted: null
+        };
+      }
+    }
+    // Longer acronyms (NATO, FBI, etc.): use Wikipedia direct lookup
     const acronymDef = await lookupDefinition(word, targetLang, context);
     if (acronymDef && acronymDef.length > 0) {
       return {
@@ -502,7 +593,14 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   // The phrase context always goes direct (needed for sv→es chunk alignment).
   // Short words (≤3 chars) look like English words and confuse the sv→en step
   // (e.g. "har" sv→en = "hare" instead of "have"). Direct translation handles them fine.
-  const usePivot = PIVOT_LANGS.has(sourceLang) && targetLang !== 'en' && wordForApi.length > 3;
+  // In German, ALL nouns are capitalized — lowercase words are verbs/adj/adv.
+  // The pivot (de→en→es) gives noun readings for lowercase German words
+  // (e.g. "wolle" de→en="wool"→"lana" instead of "querer"). Direct de→es
+  // handles German verb forms correctly without pivot. Only skip pivot for
+  // German lowercase; capitalized German nouns still benefit from the pivot.
+  const _wordStartsUpper = word.length >= 3 && word[0] === word[0].toUpperCase() && word[0] !== word[0].toLowerCase();
+  const usePivot = PIVOT_LANGS.has(sourceLang) && targetLang !== 'en' && wordForApi.length > 3
+    && (sourceLang !== 'de' || _wordStartsUpper);
   const translate = async (text, returnChunks = false) => {
     if (provider === PROVIDER_LIBRETRANSLATE) {
       return callLibreTranslate(text, sourceLang, targetLang, settings.apiUrl, settings.apiKey);
@@ -518,8 +616,13 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
       // If that language is in PIVOT_LANGS (e.g. de) but pivot wasn't active (because
       // we only knew 'auto'), redo the call via pivot for much better quality.
       // Example: German page without lang="de" → GT auto-detects 'de' → pivot de→en→es.
+      // Skip re-pivot for German lowercase words: pivot de→en→es misreads verb forms as nouns
+      // (e.g. "wolle" de→en="wool"→"lana" instead of the verb "querer"). Direct de→es is better.
+      const _isGermanLowerWord = !_wordStartsUpper &&
+        (_gtResult.detectedLang === 'de' || sourceLang === 'de');
       if (!usePivot && !returnChunks && _gtResult.detectedLang &&
-          PIVOT_LANGS.has(_gtResult.detectedLang) && targetLang !== 'en' && text.length > 3) {
+          PIVOT_LANGS.has(_gtResult.detectedLang) && targetLang !== 'en' && text.length > 3
+          && !_isGermanLowerWord) {
         return await callGoogleTranslatePivot(text, _gtResult.detectedLang, targetLang);
       }
       return _gtResult;
@@ -615,6 +718,7 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   const sentenceChunks   = sentenceRawFull?.chunks ?? null;
   const sentMinusRawFull = sentMinusResult.status === 'fulfilled' ? sentMinusResult.value : null;
   const sentMinusRaw     = sentMinusRawFull?.text ?? sentMinusRawFull ?? null;
+  const _dbgTokens = sentenceForTranslation ? sentenceForTranslation.split(/\s+/).map(t => t.replace(/[.,!?;:()"[\]]/g,'').toLowerCase()) : [];
 
   // Sentence-context extraction — two-step strategy:
   //
@@ -644,18 +748,100 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
     sentenceExtracted = null;
   }
   if (!sentenceExtracted && sentenceRaw && sentMinusRaw) {
-    const _fullToks = new Set((sentenceRaw.toLowerCase().match(/[\wáéíóúüäöñàèìòùçßÀ-ɏ]+/g) || []));
-    const _minusToks = new Set((sentMinusRaw.toLowerCase().match(/[\wáéíóúüäöñàèìòùçßÀ-ɏ]+/g) || []));
-    const _unique = [..._fullToks].filter(t => !_minusToks.has(t) && t.length >= 3);
-    // Only use when diff is small (< half of full tokens changed — larger diffs mean
-    // GT restructured the whole sentence, making the diff meaningless).
-    if (_unique.length === 1) {  // Only use diff when exactly 1 word disappears
-      _unique.sort((a, b) => b.length - a.length); // longest = most specific
-      // Use .find() so we skip candidates that equal wordRaw (e.g. "rugido" for Drohnen)
-      // and pick the next best candidate ("drones") instead.
-      const _cand = _unique.find(t => t !== word.toLowerCase() && t !== (wordRaw || '').toLowerCase());
-      if (_cand) {
-        sentenceExtracted = _cand;
+    const _fullToksAll = new Set((sentenceRaw.toLowerCase().match(/[\wáéíóúüäöñàèìòùçßÀ-ɏ]+/g) || []));
+    const _minusToksAll = new Set((sentMinusRaw.toLowerCase().match(/[\wáéíóúüäöñàèìòùçßÀ-ɏ]+/g) || []));
+    // Short clitic pronouns (length 2) that get filtered by the length check but are
+    // critical for reconstructing reflexive verbs: "se prepara", "me llama", etc.
+    const SHORT_CLITICS = ['se', 'me', 'te', 'le', 'nos', 'os'];
+    const lostClitic = SHORT_CLITICS.find(r => _fullToksAll.has(r) && !_minusToksAll.has(r)) || null;
+    // Content words only: length >= 4 filters noise like "que", "los", "una", "con"
+    const _unique = [..._fullToksAll].filter(t => !_minusToksAll.has(t) && t.length >= 4);
+    // Use diff when 1–3 content words disappeared (wider than just 1 to handle verb
+    // restructuring by GT, e.g. "a medida que" → "mientras" produces 2 side-effect tokens)
+    if (_unique.length >= 1 && _unique.length <= 3) {
+      const wLow = word.toLowerCase();
+      const wrLow = (wordRaw || '').toLowerCase();
+      const fullLower = sentenceRaw.toLowerCase();
+      let bestCand = null;
+      if (lostClitic) {
+        // A clitic ("se", "me"…) disappeared alongside content words.
+        // The verb is the content word that appears CLOSEST AFTER the clitic in the translation.
+        // e.g. "Francia se prepara para… a medida que…" → clitic="se" at pos 8,
+        //       "prepara" at pos 11 (dist 3), "medida" at pos 40 (dist 32) → pick "prepara" ✓
+        const reflexIdx = fullLower.indexOf(lostClitic);
+        let bestDist = Infinity;
+        for (const t of _unique) {
+          if (t === wLow || t === wrLow) continue;
+          const tIdx = fullLower.indexOf(t, reflexIdx);
+          if (tIdx !== -1 && tIdx - reflexIdx < bestDist) {
+            bestDist = tIdx - reflexIdx;
+            bestCand = t;
+          }
+        }
+        if (bestCand) {
+          // Only join clitic + verb if they appear CONSECUTIVELY in the translation.
+          // Prevents false joins like "se" + "vuelto" when "ha" sits between them
+          // ("no se ha vuelto") — that's sentence restructuring, not a direct translation.
+          // Valid cases like "se prepara" or "se transforma" do appear consecutively. ✓
+          const phrase1 = `${lostClitic} ${bestCand}`;
+          const phrase2 = `${bestCand} ${lostClitic}`;
+          if (fullLower.includes(phrase1)) sentenceExtracted = phrase1;
+          else if (fullLower.includes(phrase2)) sentenceExtracted = phrase2;
+        }
+      } else if (_unique.length === 1) {
+        // No clitic, exactly 1 content word disappeared → safe to use directly.
+        const _cand = _unique.find(t => t !== wLow && t !== wrLow);
+        if (_cand) sentenceExtracted = _cand;
+      } else if (_unique.length === 2) {
+        // No clitic, 2 content words disappeared.
+        // Safe ONLY if they appear CONSECUTIVELY in the sentence translation
+        // → genuine 2-word phrase (e.g. "würdigt" → "rinde homenaje" appear together).
+        // NOT safe if they're spread apart (e.g. "peak" → "alcanza...punto máximo"
+        // are separated by other words → sentence restructured, not a direct translation).
+        // Also reject if either candidate is a Spanish function word / reflexive clitic
+        // (e.g. "se"+"vuelto" from sentence restructuring is NOT the translation of "Umgeben").
+        const _spFunctionWords = new Set([
+          'se','me','te','le','nos','os','les','lo','la','los','las',
+          'un','una','el','de','en','a','y','o','que','con','por','para',
+          'como','pero','más','no','ya','si','ni','ha','he','es','son',
+          'fue','ser','estar','este','esta','su','al','del'
+        ]);
+        const candidates = _unique.filter(t => t !== wLow && t !== wrLow);
+        if (candidates.length === 2 && candidates.every(t => !_spFunctionWords.has(t))) {
+          const [cA, cB] = candidates;
+          if (fullLower.includes(`${cA} ${cB}`)) sentenceExtracted = `${cA} ${cB}`;
+          else if (fullLower.includes(`${cB} ${cA}`)) sentenceExtracted = `${cB} ${cA}`;
+        }
+      } else if (_unique.length === 3) {
+        // 3 unique tokens: removing the word restructured a whole clause (common for
+        // German modal/auxiliary verbs in Konjunktiv I indirect speech, e.g. "wolle").
+        // Side-effect: other verbs flip between infinitive and conjugated forms.
+        // Strategy: for German lowercase verbs, filter out Spanish infinitives (-ar/-er/-ir)
+        // — those are restructuring artefacts. The hovered verb's own translation is the
+        // conjugated form that remains (e.g. "quiere" from "wolle"/wollen).
+        // Only safe when exactly 1 non-infinitive candidate survives.
+        const _isGermanLowerVerb = !_wordStartsUpper &&
+          (sourceLang === 'de' || pageLang === 'de' || pageLang?.startsWith('de-'));
+        if (_isGermanLowerVerb) {
+          const candidates = _unique.filter(t => t !== wLow && t !== wrLow);
+          const conjugated = candidates.filter(t => !/(?:ar|er|ir)$/i.test(t));
+          if (conjugated.length === 1) sentenceExtracted = conjugated[0];
+        }
+      }
+
+      // Stem-based fallback: runs after ALL branches when sentenceExtracted is still null.
+      // Handles cases where lostClitic consumed the branch but found nothing (e.g. "Umgeben"
+      // where "se" is a clitic but "se vuelto" isn't consecutive, yet "rodeada" shares the
+      // stem "rode" with the direct translation "rodear").
+      // Safe when exactly 1 unique token starts with the translation's stem.
+      if (!sentenceExtracted && wordRaw && wordRaw.length >= 4) {
+        const _stemBase = wordRaw.toLowerCase();
+        const _stem = _stemBase.length > 5
+          ? _stemBase.slice(0, Math.max(3, _stemBase.length - 2))
+          : _stemBase;
+        const candidates = _unique.filter(t => t !== wLow && t !== wrLow);
+        const byLemma = candidates.filter(t => t.startsWith(_stem));
+        if (byLemma.length === 1) sentenceExtracted = byLemma[0];
       }
     }
   }
@@ -676,10 +862,20 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   const isCapitalized = word.length >= 3 &&
     word[0] === word[0].toUpperCase() && word[0] !== word[0].toLowerCase();
 
-  // Signal A
-  const wordAppearsInContext = isCapitalized && phraseRaw &&
-    new RegExp(`(?:^|[^\\wÀ-ɏ])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:[^\\wÀ-ɏ]|$)`, 'i')
-      .test(phraseRaw);
+  // Signal A: word appears unchanged in the phrase or sentence translation.
+  // We check BOTH phraseRaw and sentenceRaw because:
+  //   - phraseRaw (short context window) may omit the word when it's at the very start
+  //     of a sentence and the context extractor only captures words that follow it.
+  //   - sentenceRaw (full sentence translation) almost always preserves proper nouns.
+  // e.g. "Pissos" at sentence start → phraseRaw = "en la región suroeste de las Landas..."
+  //      (no "Pissos") but sentenceRaw = "Pissos, en la región suroeste..." → caught ✓
+  const _properNounPattern = new RegExp(
+    `(?:^|[^\\wÀ-ɏ])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:[^\\wÀ-ɏ]|$)`, 'i'
+  );
+  const wordAppearsInContext = isCapitalized && (
+    (phraseRaw && _properNounPattern.test(phraseRaw)) ||
+    (sentenceRaw && _properNounPattern.test(sentenceRaw))
+  );
 
   // Signal B
   // Use wordForApi (apostrophe prefix already stripped, e.g. "enquête" not "L'ENQUÊTE")
@@ -831,6 +1027,51 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   // since it reflects the actual usage in the sentence.
   let effectiveAlts = [...wordAlts];
 
+  // German noun recovery: pivot validation discards correct noun translations for inflected forms.
+  // Example: "Kriegen" (dative pl. of "Krieg"=war) → pivot gives "guerras" → not found in 2-word
+  // context phrase → pivotInPhrase=false → wordPosGroups cleared → direct de→es reads "kriegen"
+  // as verb → "Conseguir". Fix: if the word is a German noun (capitalized, not ALL-CAPS) and
+  // posGroups are empty, supplement via English pivot without the anchor constraint.
+  // We only accept noun POS groups and override the translation with the noun sense.
+  const _probGermanNoun = isCapitalized && !isAllCaps &&
+    (sourceLang === 'de' || pageLang === 'de' || pageLang?.startsWith('de-'));
+  if (_probGermanNoun && word.length > 4 &&
+      !wordPosGroups.some(g => /^noun|^sustantivo|^Substantiv/i.test(g.pos))) {
+    // German inflected nouns often lack a bilingual dict entry (GT only has the base form).
+    // Example: "Kriegen" (dative pl. of "Krieg"=war) → GT returns only verb "kriegen" with no
+    // noun POS entry. Strategy: strip common German noun inflection suffixes to find the base
+    // form ("Krieg"), then call GT for the base form.
+    // NOTE: posGroups in callGoogleTranslate requires ≥2 POS entries to be built. Since the
+    // base form often has only one POS (noun), we rely on _baseResult.text + firstPos instead.
+    // Order matters: try "n" before "en" so "Krisen"→"Krise"(→crisis) beats "Kris"(→Cris/wrong).
+    // Longer compound suffixes first to avoid under-stripping.
+    const _nounSuffixes = ['nen','ern','ien','chen','lein','ungen','heiten','keiten',
+                           'n','es','em','er','e','s','en'];
+    for (const suf of _nounSuffixes) {
+      const baseLen = word.length - suf.length;
+      if (!word.toLowerCase().endsWith(suf) || baseLen < 3) continue;
+      const _base = word.slice(0, baseLen);
+      const _baseCap = _base.charAt(0).toUpperCase() + _base.slice(1);
+      if (_baseCap === word) continue; // no change — skip
+      let _baseResult = null;
+      try { _baseResult = await callGoogleTranslate(_baseCap, 'de', targetLang, false); } catch { continue; }
+      if (!_baseResult?.text) continue;
+      // Accept if GT didn't echo the input back (i.e. it has an actual translation)
+      const _baseLow = _baseResult.text.toLowerCase().trim();
+      const _inputLow = _baseCap.toLowerCase();
+      if (_baseLow === _inputLow) continue; // echo — base form also unknown
+      // Reject if Spanish result starts with uppercase → likely a proper noun (e.g. "Kris"→"Cris")
+      if (_baseResult.text[0] && _baseResult.text[0] === _baseResult.text[0].toUpperCase() &&
+          /[A-ZÀ-Ö]/.test(_baseResult.text[0])) continue;
+      // Build a synthetic noun posGroup from the base translation
+      const _synthTranslations = [_baseResult.text, ...(_baseResult.alternatives || [])].slice(0, 3);
+      wordPosGroups = [{ pos: 'noun', translations: _synthTranslations }];
+      finalWordTranslation = _baseResult.text;
+      effectiveAlts = _baseResult.alternatives?.slice(0, 2) || [];
+      break;
+    }
+  }
+
   // Context-chunk correction: for function words, dt=at gives multiple valid translations
   // (e.g. "att" → primary "a", alts ["que","para"]) but the RIGHT one depends on context.
   // If the phrase chunk gives a translation that's in our alternatives list, promote it to
@@ -909,12 +1150,16 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   if (!finalWordTranslation && !phraseRaw) {
     // No usable translation — look up definition anyway (useful for same-language case)
     const definition = await lookupDefinition(word, targetLang, context);
+    const _fnFull = context ? extractFullName(word, context) : word;
+    const _fnDisplay = definition?.displayName
+      || ((_fnFull !== word && _fnFull.includes(' ')) ? _fnFull : undefined);
     return {
       translation: null,
       alternatives: [],
       translatable: false,
       sameLanguage,
       definition,
+      displayWord: _fnDisplay,
       extractedTranslation: usePivot ? null : (extractedTranslation || null),
       contextPhrase: context || null,
       contextTranslation: null
@@ -1012,6 +1257,16 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
     definition = null; // suppress spurious Wikipedia result (looked up before sep-verb was known)
   }
 
+  const _mainFull = (definition && context) ? extractFullName(word, context) : word;
+  const _mainDisplay = definition?.displayName
+    || ((_mainFull !== word && _mainFull.includes(' ')) ? _mainFull : undefined);
+  if (/^pablo$/i.test(word) || /^iglesias$/i.test(word)) {
+  }
+  // In German, every capitalized word is a noun (German capitalizes ALL nouns).
+  // This flag lets content.js prefer noun POS groups and skip verb-biased logic.
+  const isGermanNoun = isCapitalized && !isAllCaps &&
+    (sourceLang === 'de' || pageLang === 'de' || pageLang?.startsWith('de-'));
+
   return {
     translation: finalWordTranslation,
     alternatives: finalWordTranslation ? effectiveAlts : [],
@@ -1019,11 +1274,15 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
     translatable: !!finalWordTranslation,
     sameLanguage,
     definition,
+    displayWord: _mainDisplay,
     extractedTranslation: usePivot ? null : (extractedTranslation || null),
     contextPhrase: context || null,
     contextTranslation: phraseRaw || null,
     sentenceTranslation: sentenceRaw || null,
+    sentMinusTranslation: sentMinusRaw || null,
     sentenceExtracted: sentenceExtracted || null,
+    isGermanNoun: isGermanNoun || false,
+    isGermanPage: (sourceLang === 'de' || pageLang === 'de' || pageLang?.startsWith('de-')) || false,
     separableVerb
   };
 }
@@ -1167,13 +1426,33 @@ function extractFullName(word, context) {
       if (next.length >= 2 &&
           next[0] === next[0].toUpperCase() && next[0] !== next[0].toLowerCase()) {
         name += ' ' + next;
-        // Trailing punctuation (comma, colon, period…) marks the end of the name component.
-        // e.g. "Trump," → include "Trump" but stop — don't grab the next "Barack".
+        // Trailing punctuation (comma, colon, period) marks the end of the name component.
+        // e.g. "Trump," -> include "Trump" but stop -- don't grab the next "Barack".
         if (/[,.:;!?»"')\]]$/.test(rawTok)) break;
       } else {
         break;
       }
     }
+
+    // Extend leftward for up to 2 preceding capitalized tokens (e.g. "Pablo" before "Iglesias")
+    // Only when no rightward expansion was found (word looks like a standalone surname).
+    if (!name.includes(' ') && idx > 0) {
+      const leftParts = [];
+      for (let i = idx - 1; i >= 0 && i >= idx - 2; i--) {
+        const rawTok = tokens[i];
+        const prev = rawTok.replace(/[^a-zA-ZÀ-ɏ-]/g, '');
+        if (prev.length >= 2 &&
+            prev[0] === prev[0].toUpperCase() && prev[0] !== prev[0].toLowerCase()) {
+          leftParts.unshift(prev);
+          // Stop if the token before this one ended a sentence
+          if (i > 0 && /[.!?]$/.test(tokens[i - 1])) break;
+        } else {
+          break;
+        }
+      }
+      if (leftParts.length > 0) name = leftParts.join(' ') + ' ' + name;
+    }
+
     return name;
   } catch {
     return word;
@@ -1185,6 +1464,68 @@ function extractFullName(word, context) {
 // For proper nouns, tries the full name extracted from context before falling
 // back to the single word.
 // ---------------------------------------------------------------------------
+// Full-text Wikipedia search for short acronyms (PM, EU, UN, etc.) that hit
+// disambiguation pages on direct lookup. Returns the most relevant non-geographic,
+// non-trivial article — e.g. "PM" → "Prime Minister".
+async function lookupWikipediaAcronymSearch(word, context = null, targetLang = 'en') {
+  // Detect political/title context:
+  // "as UK PM" / "as PM" pattern → word is a title (Prime Minister, etc.)
+  const escaped = word.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+  const isUsedAsTitle = context &&
+    new RegExp('\\bas\\s+(?:\\w+\\s+)?' + escaped + '\\b', 'i').test(context);
+  const hasPoliticalKeywords = context &&
+    /\b(minister|parliament|government|prime|premier|MP|cabinet|senate|congress|election|party|White\s+House|Downing|chancellor|president|official|nominee|appointed|confirmed)\b/i.test(context);
+  const isPolitical = isUsedAsTitle || hasPoliticalKeywords;
+
+  // Fetch article — prefer target-language Wikipedia, fall back to English
+  const fetchBest = async (title) => {
+    if (targetLang && targetLang !== 'en') {
+      const r = await fetchWikiSummary(title, targetLang);
+      if (r) return r;
+    }
+    return await fetchWikiSummary(title, 'en');
+  };
+
+  const filterTitle = t => {
+    if (/\bdisambiguation\b/i.test(t)) return false;
+    if (/\b(county|district|village|city|town|commune|borough|municipality)\b/i.test(t)) return false;
+    if (/\b(film|song|album|EP|TV\s+series|novel)\b/i.test(t)) return false;
+    if (/\b(company|corporation|enterprise|energy|airline|airport|railway|fund|bank|group)\b/i.test(t)) return false;
+    return true;
+  };
+
+  try {
+    if (isPolitical) {
+      const res = await fetch(
+        'https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
+        encodeURIComponent(word + ' politics prime minister title') +
+        '&srnamespace=0&srlimit=3&srprop=&format=json&origin=*'
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const hits = (data?.query?.search || []).map(h => h.title).filter(filterTitle);
+        for (const title of hits.slice(0, 2)) {
+          const r = await fetchBest(title);
+          if (r) return r;
+        }
+      }
+    }
+    const res = await fetch(
+      'https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
+      encodeURIComponent(word) +
+      '&srnamespace=0&srlimit=5&srprop=&format=json&origin=*'
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const hits = (data?.query?.search || []).map(h => h.title).filter(filterTitle);
+    for (const title of hits.slice(0, 3)) {
+      const r = await fetchBest(title);
+      if (r) return r;
+    }
+  } catch {}
+  return null;
+}
+
 async function lookupDefinition(word, targetLang = 'en', context = null) {
   // For capitalized words, try to build the full name from surrounding context
   // e.g. "Donald" + context "Donald Trump prend la parole" → look up "Donald Trump"
@@ -1192,10 +1533,46 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
     word[0] === word[0].toUpperCase() && word[0] !== word[0].toLowerCase();
 
   if (isCapitalized && context) {
-    const fullName = extractFullName(word, context);
+    // Check for "El/La [word]" compound — handles "El Niño", "La Niña" (weather),
+    // "El Chapo", "La Palma", etc. The word may appear ALL-CAPS in headlines.
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    for (const article of ['El', 'La']) {
+      if (new RegExp('(?:^|\\s)' + article + '\\s+' + escaped + '(?:\\s|$)', 'i').test(context)) {
+        const titleCase = word[0].toUpperCase() + word.slice(1).toLowerCase();
+        const compoundWiki = await lookupWikipedia(article + ' ' + titleCase, targetLang);
+        if (compoundWiki) return [compoundWiki];
+      }
+    }
+
+    // Don't expand common articles/prepositions (la, el, de, du, etc.) —
+    // they cause false compounds like "La UE" (Spanish article + acronym).
+    const isCommonFunctionWord = /^(la|le|les|el|los|las|de|du|des|il|lo|gli|di|da|das|die|der|ein|eine|une|un|the|a|an|al|del|dal|nel|sul)$/i.test(word);
+    const fullName = isCommonFunctionWord ? word : extractFullName(word, context);
     if (fullName !== word && fullName.includes(' ')) {
       const wikiFullName = await lookupWikipedia(fullName, targetLang);
-      if (wikiFullName) return [wikiFullName];
+      if (wikiFullName) { const r = [wikiFullName]; r.displayName = fullName; return r; }
+      // Full name hit a disambiguation page or was not found directly.
+      // Try full-text search to find e.g. "Pablo Iglesias Turrion" or "Pablo Iglesias (politician)".
+      try {
+        const fnRes = await fetch(
+          'https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
+          encodeURIComponent(fullName) +
+          '&srnamespace=0&srlimit=3&srprop=&format=json&origin=*'
+        );
+        if (fnRes.ok) {
+          const fnData = await fnRes.json();
+          const fnHits = (fnData?.query?.search || [])
+            .map(h => h.title)
+            .filter(t => !/\bdisambiguation\b/i.test(t))
+            .filter(t => !/-(?:Tag|Day|Gedenktag|Memorial|Gedenkfeier)$/i.test(t));
+          for (const fnTitle of fnHits.slice(0, 2)) {
+            const fnR = (targetLang && targetLang !== 'en')
+              ? (await fetchWikiSummary(fnTitle, targetLang) || await fetchWikiSummary(fnTitle, 'en'))
+              : await fetchWikiSummary(fnTitle, 'en');
+            if (fnR) { const r = [fnR]; r.displayName = fullName; return r; }
+          }
+        }
+      } catch {}
     }
   }
 
@@ -1205,16 +1582,36 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
   if (isCapitalized) {
     const wiki = await lookupWikipedia(word, targetLang);
     if (wiki) {
-      // If the Wikipedia result describes a geographic place but the surrounding
-      // context signals a person (e.g. "Vance" → Belgian commune vs VP Vance),
-      // try to find the person article instead.
-      // If Wikipedia returns a geographic article for a capitalized word, try to find
-      // a person article instead. Geographic false positives (user reading about a commune)
-      // are rare — most capitalized words in context are people, not places.
-      const isGeoResult = /\b(commun[ae]|comun[ae]|municipalit[yé]|municipio|municipality|village|villaggio|pueblo|aldea|localidad|Gemeinde|gemeente|town\s+in|city\s+in|borough|hamlet|parish|census-designated|unincorporated)\b/i.test(wiki.text);
-      if (isGeoResult) {
+      // If the Wikipedia article title is a name/disambiguation meta-article
+      // (e.g. "Reino (Vorname)", "Pablo (disambiguation)"), it describes the word
+      // as a name rather than a specific entity — not useful as a definition.
+      // Return null so the translation API handles the word instead.
+      const isNameOrDisambigArticle = /\s*\((?:Vorname|given name|forename|first name|name|prénom|nome|desambiguación|disambiguation|Begriffsklärung)\)\s*$/i.test(wiki.title || '');
+      if (isNameOrDisambigArticle) return null;
+
+      // Check geo/country only in the first sentence of the Wikipedia summary.
+      // Geographic articles start with "Country in..." / "Municipality in..." etc.
+      // Biographical articles start with "[Name] is a British politician..." but may
+      // mention "United Kingdom" later — matching kingdom in full text causes false positives.
+      const firstSentence = (wiki.text || '').split(/\.(?:\s|$)/)[0];
+      const isGeoResult = /\b(commun[ae]|comun[ae]|municipalit[yé]|municipio|municipality|village|villaggio|pueblo|aldea|localidad|Gemeinde|gemeente|town\s+in|city\s+in|borough|hamlet|parish|census-designated|unincorporated)\b/i.test(firstSentence);
+      const isCountryResult = /\b(country|sovereign state|nation-state|principality|duchy|island state|island nation|kingdom\s+in|republic\s+in|state\s+in|country\s+in)\b/i.test(firstSentence);
+      if (isGeoResult || isCountryResult) {
+        // Multi-word geo/country names ("Reino Unido", "New York") → skip person fallback,
+        // return null so the translation API handles them directly.
+        if (word.includes(' ')) return null;
         const personWiki = await lookupWikipediaPersonFallback(word, targetLang);
         if (personWiki) return [personWiki];
+      }
+      // Derive displayName from article title when it contains more than the searched word.
+      // e.g. word="Pablo", title="Pablo Iglesias Turrion" -> displayName="Pablo Iglesias"
+      const wikiTitle = wiki.title || '';
+      const cleanedTitle = wikiTitle.replace(/\s*\(.*\)\s*$/, '').trim();
+      const titleWords = cleanedTitle.split(/\s+/);
+      if (titleWords.length >= 2 && titleWords[0].toLowerCase() === word.toLowerCase()) {
+        const r = [wiki];
+        r.displayName = titleWords.slice(0, 2).join(' ');
+        return r;
       }
       return [wiki];
     }
@@ -1228,9 +1625,17 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
 // Uses Wikipedia's full-text Search API (not OpenSearch) which finds "JD Vance"
 // when searching "Vance", unlike OpenSearch which only matches title prefixes.
 async function lookupWikipediaPersonFallback(word, targetLang) {
+  // Fetch article — prefer target-language Wikipedia, fall back to English
+  const fetchBest = async (title) => {
+    if (targetLang && targetLang !== 'en') {
+      const r = await fetchWikiSummary(title, targetLang);
+      if (r) return r;
+    }
+    return await fetchWikiSummary(title, 'en');
+  };
   // 1. Try common disambiguation suffixes first (cheap, exact)
   for (const suffix of ['(politician)', '(American politician)']) {
-    const r = await fetchWikiSummary(`${word} ${suffix}`, 'en');
+    const r = await fetchBest(`${word} ${suffix}`);
     if (r) return r;
   }
   // 2. Wikipedia full-text search — finds "JD Vance" for query "Vance"
@@ -1244,25 +1649,36 @@ async function lookupWikipediaPersonFallback(word, targetLang) {
       .map(h => h.title)
       .filter(t => {
         const tl = t.toLowerCase();
-        // Skip exact match (it's the same geographic article we already have)
         if (tl === word.toLowerCase()) return false;
-        // Skip "City, State" style geographic titles
         if (/, [A-Z]/.test(t)) return false;
-        // Skip titles with explicit geographic keywords
         if (/\b(county|district|township|municipality|commune|borough|village|city|town)\b/i.test(t)) return false;
+        // Skip year/event chronicle articles (e.g. "Events in the year 2026 in France",
+        // "2024 European heatwaves") — these are never person articles and often appear in
+        // full-text searches when the word is a place mentioned in news coverage.
+        if (/\b(events?\s+in|events?\s+of|timeline\s+of|list\s+of|deaths?\s+in|births?\s+in)\b/i.test(t)) return false;
+        if (/\b\d{4}\b/.test(t) && /\b(events?|heatwave|flood|fire|disaster|earthquake|hurricane|storm|crisis)\b/i.test(t)) return false;
         return true;
       });
     for (const title of hits.slice(0, 2)) {
-      const r = await fetchWikiSummary(title, 'en');
-      if (r) return r;
+      const r = await fetchBest(title);
+      if (r) {
+        // Skip if the fallback article is itself a geo/country entry — it's not a person.
+        const isFallbackGeo = /\b(country|sovereign state|nation-state|republic|kingdom|empire|principality|duchy|state in|country in|commun[ae]|municipalit|village|city\s+in|town\s+in)\b/i.test(r.text);
+        // Skip year/event chronicle articles — their TEXT starts with "Events in..."
+        // even when the title is just "2026 in France" (no "events" keyword in title).
+        const isEventChronicle = /\b(events?\s+(in|of|during)|timeline\s+of|deaths?\s+in|births?\s+in)\b/i.test(r.text) ||
+          /^\d{4}\s+in\s+/i.test(r.title || '');
+        // The article title must contain the searched word — otherwise it's a false positive
+        // from full-text search (e.g. "European route E5" found because E5 passes through Pissos).
+        // Person articles always have the person's name in the title (JD Vance, Donald Trump…).
+        const titleContainsWord = (r.title || '').toLowerCase().includes(word.toLowerCase());
+        if (!isFallbackGeo && !isEventChronicle && titleContainsWord) return r;
+      }
     }
   } catch {}
   return null;
 }
 
-// Wikipedia REST API — tries target-language Wikipedia first, then English.
-// This means "Météo-France" will show a Spanish description on es.wikipedia.org
-// when the target language is Spanish, rather than the English one.
 async function lookupWikipedia(word, targetLang = 'en') {
   try {
     // 1. Try target-language Wikipedia (skipped when target is already English)
@@ -1353,7 +1769,9 @@ async function fetchWikiSummary(title, lang = 'en') {
     }
     if (!text) return null;
     const short = text.length > 120 ? text.substring(0, 117) + '…' : text;
-    return { text: short, pos: '' };
+    if (title && (title.toLowerCase().includes('pablo') || title.toLowerCase().includes('iglesias'))) {
+    }
+    return { text: short, pos: '', title: data.title || '' };
   } catch {
     return null;
   }
@@ -1632,9 +2050,8 @@ async function supplementPosGroupsViaEn(word, sourceLang, targetLang) {
   // Step 1: source → en (get rich POS structure + data[5] alternatives)
   let enResult;
   try { enResult = await callGoogleTranslate(word, sourceLang, 'en', false); }
-  catch (e) { console.log('[HT-debug] supplementPosGroupsViaEn src→en failed:', e.message); return null; }
+  catch (e) { return null; }
   const enPosGroups = enResult.posGroups ?? [];
-  console.log('[HT-debug] src→en result:', { text: enResult.text, alts: enResult.alternatives, posGroups: JSON.stringify(enPosGroups) });
 
   // Path A: data[1] gave ≥2 POS groups → translate each group primary term en→target.
   if (enPosGroups.length >= 2) {
@@ -1722,7 +2139,6 @@ async function supplementPosGroupsViaEn(word, sourceLang, targetLang) {
     if (groups.length >= 3) break;
   }
 
-  console.log('[HT-debug] Path B groups:', JSON.stringify(groups));
   return groups.length >= 2 ? groups : null;
 }
 
@@ -1834,22 +2250,22 @@ async function testConnection(provider, apiUrl, apiKey, email) {
 // ---------------------------------------------------------------------------
 async function getDailyUsage() {
   const today = getToday();
-  const data = await chrome.storage.local.get(['daily_date', 'daily_count', 'premium']);
+  const data = await chrome.storage.sync.get(['daily_date', 'daily_count', 'premium']);
   const isPremium = !!data.premium;
   let count = 0;
   if (data.daily_date === today) {
     count = data.daily_count || 0;
   } else {
-    await chrome.storage.local.set({ daily_date: today, daily_count: 0 });
+    await chrome.storage.sync.set({ daily_date: today, daily_count: 0 });
   }
   return { count, limit: FREE_DAILY_LIMIT, isPremium };
 }
 
 async function incrementDailyCount() {
   const today = getToday();
-  const data = await chrome.storage.local.get(['daily_date', 'daily_count']);
+  const data = await chrome.storage.sync.get(['daily_date', 'daily_count']);
   const newCount = (data.daily_date === today ? (data.daily_count || 0) : 0) + 1;
-  await chrome.storage.local.set({ daily_date: today, daily_count: newCount });
+  await chrome.storage.sync.set({ daily_date: today, daily_count: newCount });
   return newCount;
 }
 
@@ -1858,20 +2274,11 @@ function getToday() {
 }
 
 // ---------------------------------------------------------------------------
-// Premium key validation
+// Premium key validation & activation
 // ---------------------------------------------------------------------------
-async function activatePremium(key) {
-  if (!key || typeof key !== 'string') return { success: false, error: 'INVALID_KEY' };
-  const cleanKey = key.trim().toUpperCase();
-  const isValid = await validatePremiumKey(cleanKey);
-  if (isValid) {
-    await chrome.storage.local.set({ premium: true, premium_key: cleanKey });
-    return { success: true };
-  }
-  return { success: false, error: 'INVALID_KEY' };
-}
 
-async function validatePremiumKey(key) {
+// Step 1: fast local HMAC check (catches typos without hitting the network).
+async function validatePremiumKeyLocal(key) {
   const parts = key.split('-');
   if (parts.length !== 3 || parts[0] !== 'HVTR') return false;
   const data = parts[1];
@@ -1891,6 +2298,42 @@ async function validatePremiumKey(key) {
   } catch { return false; }
 }
 
+// Step 2: call the Cloudflare Worker to burn the key (one-time use).
+// Returns { success, error } where error can be:
+//   'INVALID_KEY'      — bad format or wrong HMAC
+//   'KEY_ALREADY_USED' — key was already activated on another browser
+//   'NETWORK_ERROR'    — could not reach the worker (offline, etc.)
+async function activateKeyOnWorker(key) {
+  try {
+    const res = await fetch(`${LICENSE_WORKER_URL}/activate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key })
+    });
+    if (!res.ok) return { success: false, error: 'NETWORK_ERROR' };
+    return await res.json();
+  } catch {
+    return { success: false, error: 'NETWORK_ERROR' };
+  }
+}
+
+async function activatePremium(key) {
+  if (!key || typeof key !== 'string') return { success: false, error: 'INVALID_KEY' };
+  const cleanKey = key.trim().toUpperCase();
+
+  // 1. Quick local check before hitting the network
+  const localValid = await validatePremiumKeyLocal(cleanKey);
+  if (!localValid) return { success: false, error: 'INVALID_KEY' };
+
+  // 2. Call the Worker to burn the key (prevents reuse on other browsers)
+  const workerResult = await activateKeyOnWorker(cleanKey);
+  if (!workerResult.success) return workerResult;
+
+  // 3. Store premium status locally
+  await chrome.storage.sync.set({ premium: true, premium_key: cleanKey });
+  return { success: true };
+}
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
@@ -1907,14 +2350,14 @@ const DEFAULT_SETTINGS = {
 };
 
 async function getSettings() {
-  const data = await chrome.storage.local.get('settings');
+  const data = await chrome.storage.sync.get('settings');
   return { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
 }
 
 async function saveSettings(newSettings) {
   const current = await getSettings();
   const merged = { ...current, ...newSettings };
-  await chrome.storage.local.set({ settings: merged });
+  await chrome.storage.sync.set({ settings: merged });
   return { success: true, settings: merged };
 }
 
