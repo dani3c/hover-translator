@@ -1,5 +1,5 @@
 # Plan Técnico: Hover Translator — Estado actual
-> Última actualización: 2026-06-24 (sesión 3)
+> Última actualización: 2026-06-25 (sesión 5)
 
 ---
 
@@ -8,7 +8,7 @@
 **✅ Publicada en Chrome Web Store**
 https://chromewebstore.google.com/detail/hover-translator/pjbgkafflfgaaknaaekbnpjjohpeihoa
 
-**Versión en store:** 1.0.2 · **En desarrollo (pendiente de subir):** 1.0.3
+**Versión en store:** 1.0.2 · **Última publicada / lista para subir:** 1.0.4
 **Modelo:** Freemium — 100 palabras/día gratis · €14.99 pago único para Premium
 
 ---
@@ -17,7 +17,7 @@ https://chromewebstore.google.com/detail/hover-translator/pjbgkafflfgaaknaaekbnp
 
 ```
 hover-translator/
-├── manifest.json               # MV3, v1.0.2 (store) / 1.0.3 en desarrollo
+├── manifest.json               # MV3, v1.0.4
 ├── background.js               # Service worker (~2200 líneas): traducción, Wikipedia, caché
 ├── content.js                  # Content script: hover, tooltip, extracción de palabra
 ├── content.css                 # Estilos del tooltip
@@ -164,6 +164,13 @@ Hay varios scripts Python (`push_*.py`, `fix_*.py`) para aplicar correcciones pu
 - [x] Punto tras dígito en alemán no corta frase ("19. Februar", "19.02") ✅
 - [x] "man", "es" y ~100 palabras funcionales más (de/fr/it/pt/nl) → tabla hardcodeada que bypasea el diff ✅
 - [x] MULTILANG_ACRONYMS migrado a formato `{ wiki, names }` completo — "UE" ahora devuelve `translation: "EU"` (alemán) en vez de null ✅ (sesión 3)
+- [x] "Ausländerhass" mostraba frase de contexto completa en vez de "xenofobia" — fix: traducción de frase con más palabras que el input → fallback a primera palabra ✅ (sesión 4)
+- [x] "Merz" no mostraba definición Wikipedia — fix: sustantivos propios donde GT devuelve la palabra sin cambio también buscan Wikipedia ✅ (sesión 4)
+- [x] "Starmers" (genitivo alemán) → "Keir Starmer" Wikipedia — fix: strip -s genitivo + filtro artículos de gabinete/lista + full-text search por forma sin -s ✅ (sesión 4)
+- [x] displayWord tooltip mostraba frase multi-palabra entera — fix: content.js prioriza response.displayWord; background.js usa título del artículo Wikipedia ✅ (sesión 4)
+- [x] Frase de contexto no siempre visible — fix: branch translatable muestra contextPhrase como fallback ✅ (sesión 4)
+- [x] Versión popup hardcodeada — fix: lee `chrome.runtime.getManifest().version` dinámicamente ✅ (sesión 4)
+- [x] "Deutschlands"/"Südafrikas" mostraban definición en inglés/alemán — fix: nueva función `fetchWikiLangLink` usa la API langlinks de Wikipedia para obtener el título en el idioma destino y luego `fetchWikiSummary` en ese idioma ✅ (sesión 5)
 - [ ] Revisar comportamiento con páginas sin atributo `lang` (pageLang = null)
 - [ ] Mejorar detección de mismo idioma para páginas multilingüe
 - [ ] Afinar chunk alignment para idiomas CJK (chino, japonés, coreano)
