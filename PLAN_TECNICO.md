@@ -1,5 +1,5 @@
 # Plan Técnico: Hover Translator — Estado actual
-> Última actualización: 2026-06-25 (sesión 5)
+> Última actualización: 2026-06-26 (sesión 6)
 
 ---
 
@@ -171,6 +171,11 @@ Hay varios scripts Python (`push_*.py`, `fix_*.py`) para aplicar correcciones pu
 - [x] Frase de contexto no siempre visible — fix: branch translatable muestra contextPhrase como fallback ✅ (sesión 4)
 - [x] Versión popup hardcodeada — fix: lee `chrome.runtime.getManifest().version` dinámicamente ✅ (sesión 4)
 - [x] "Deutschlands"/"Südafrikas" mostraban definición en inglés/alemán — fix: nueva función `fetchWikiLangLink` usa la API langlinks de Wikipedia para obtener el título en el idioma destino y luego `fetchWikiSummary` en ese idioma ✅ (sesión 5)
+- [x] "SINKEVICIUS" → "nombrado" — fix: NFD normalización aplicada ANTES de strip ASCII en `_wikiLastWordMatch`; guard `!(isCapitalized && definition)` para `sentenceExtracted` ✅ (sesión 6)
+- [x] "PARIS" → "príncipe troyano" — fix: `_PROPER_OVERRIDES` map que fuerza English Wikipedia; `isMythOrFiction` check; genitive-s threshold `> 5` ✅ (sesión 6)
+- [x] Acrónimos ALL-CAPS (IHS, WIFO) con definición incorrecta de Wikipedia en inglés — fix: para ALL-CAPS, búsqueda solo en `pageLang`/`targetLang`, sin fallback a inglés ✅ (sesión 6)
+- [x] Expansión parentética en página: "Institut für Höhere Studien (IHS)" → detecta el patrón y muestra el nombre completo directamente ✅ (sesión 6)
+- [x] Cognate check: umbral bajado a `wordForApi.length >= 4`; suprime GT cuando Wikipedia encontró artículo (no solo org-like) ✅ (sesión 6)
 - [ ] Revisar comportamiento con páginas sin atributo `lang` (pageLang = null)
 - [ ] Mejorar detección de mismo idioma para páginas multilingüe
 - [ ] Afinar chunk alignment para idiomas CJK (chino, japonés, coreano)
