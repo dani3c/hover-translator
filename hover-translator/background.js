@@ -1,7 +1,6 @@
 // =============================================================================
 // Hover Translator — Service Worker (background.js)
 // =============================================================================
-
 const HMAC_SECRET = '4b3513210b5222f854582282135d18e17aa7fd6d4f997801414a4565069ef503';
 
 // URL del Cloudflare Worker de licencias.
@@ -11,7 +10,7 @@ const LICENSE_WORKER_URL = 'https://hover-translator-licenses.daniel-marina.work
 const FREE_DAILY_LIMIT = 100;
 
 // Cache version — bump this whenever extraction logic changes to invalidate stale entries.
-const CACHE_VERSION = 90;
+const CACHE_VERSION = 133;
 
 // Providers
 const PROVIDER_MYMEMORY     = 'mymemory';
@@ -454,6 +453,196 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
           'damit':   { t: 'para que',      alts: ['con eso'],                        pos: 'conj.' },
           'trotzdem':{ t: 'de todas formas',alts: ['sin embargo', 'aun así'],        pos: 'conj.' },
           'deshalb': { t: 'por eso',       alts: ['por eso mismo'],                  pos: 'conj.' },
+    'weit':       { t: 'lejos',       alts: ['amplio', 'mucho', 'a lo lejos'],        pos: 'adv.'  },
+    'weitgehend': { t: 'en gran medida', alts: ['ampliamente', 'en su mayor parte'],    pos: 'adv.'  },
+    'weitaus':    { t: 'con mucho',    alts: ['ampliamente', 'en gran medida'],          pos: 'adv.'  },
+    'angesichts': { t: 'ante',        alts: ['en vista de', 'dado', 'frente a'],        pos: 'prep.' },
+    'aufgrund':   { t: 'debido a',    alts: ['a causa de', 'por'],                   pos: 'prep.' },
+    'während':    { t: 'durante',     alts: ['mientras', 'a lo largo de'],            pos: 'conj.' },
+    'trotz':      { t: 'a pesar de',  alts: ['pese a', 'aunque'],                    pos: 'prep.' },
+    'laut':       { t: 'según',       alts: ['conforme a', 'de acuerdo con'],         pos: 'prep.' },
+    'statt':      { t: 'en lugar de', alts: ['en vez de'],                            pos: 'prep.' },
+    'gegenüber':  { t: 'frente a',    alts: ['ante', 'respecto a'],                  pos: 'prep.' },
+    'innerhalb':  { t: 'dentro de',   alts: ['en el interior de'],                   pos: 'prep.' },
+    'außerhalb':  { t: 'fuera de',    alts: ['más allá de'],                         pos: 'prep.' },
+    'infolge':    { t: 'a consecuencia de', alts: ['como resultado de', 'debido a'], pos: 'prep.' },
+    'mithilfe':   { t: 'con ayuda de', alts: ['mediante', 'gracias a'],              pos: 'prep.' },
+      'novelle':        { t: 'enmienda',      alts: ['reforma', 'modificación legal'],       pos: 'sust.' },
+      'stellungnahmen': { t: 'declaraciones', alts: ['posicionamientos', 'comentarios'],     pos: 'sust.' },
+      'stellungnahme':  { t: 'declaración',   alts: ['posicionamiento', 'comentario'],       pos: 'sust.' },
+      'eingetroffen':   { t: 'recibido',      alts: ['llegado'],                             pos: 'adj.'  },
+      'eingetroffenen': { t: 'recibidas',     alts: ['llegadas'],                            pos: 'adj.'  },
+      // German comparative/declined adjectives that start sentences (uppercase) but are NOT proper nouns
+      'längere':   { t: 'más largo',    alts: ['más larga', 'mayor duración'],    pos: 'adj.'  },
+      'längeren':  { t: 'más largos',   alts: ['más largas'],                     pos: 'adj.'  },
+      'längerem':  { t: 'más largo',    alts: [],                                  pos: 'adj.'  },
+      'längerer':  { t: 'más larga',    alts: ['de más duración'],                pos: 'adj.'  },
+      'längeres':  { t: 'más largo',    alts: [],                                  pos: 'adj.'  },
+      'längste':   { t: 'el más largo', alts: ['la más larga'],                   pos: 'adj.'  },
+      'kürzere':   { t: 'más corto',    alts: ['más corta', 'más breve'],         pos: 'adj.'  },
+      'kürzeren':  { t: 'más cortos',   alts: ['más cortas'],                     pos: 'adj.'  },
+      'größere':   { t: 'mayor',        alts: ['más grande'],                     pos: 'adj.'  },
+      'größeren':  { t: 'mayores',      alts: ['más grandes'],                    pos: 'adj.'  },
+      'größerer':  { t: 'mayor',        alts: ['más grande'],                     pos: 'adj.'  },
+      'kleinere':  { t: 'menor',        alts: ['más pequeño', 'más pequeña'],     pos: 'adj.'  },
+      'kleineren': { t: 'menores',      alts: ['más pequeños'],                   pos: 'adj.'  },
+      'weitere':   { t: 'adicional',    alts: ['más', 'otro', 'ulterior'],        pos: 'adj.'  },
+      'weiteren':  { t: 'adicionales',  alts: ['más', 'otros'],                   pos: 'adj.'  },
+      'weiterer':  { t: 'adicional',    alts: ['otro más'],                       pos: 'adj.'  },
+      'frühere':   { t: 'anterior',     alts: ['previo', 'pasado'],               pos: 'adj.'  },
+      'früheren':  { t: 'anteriores',   alts: ['previos', 'pasados'],             pos: 'adj.'  },
+      'spätere':   { t: 'posterior',    alts: ['ulterior', 'futuro'],             pos: 'adj.'  },
+      'späteren':  { t: 'posteriores',  alts: ['futuros'],                        pos: 'adj.'  },
+      'höhere':    { t: 'mayor',        alts: ['más alto', 'superior'],           pos: 'adj.'  },
+      'höheren':   { t: 'mayores',      alts: ['más altos', 'superiores'],        pos: 'adj.'  },
+      'niedrigere':{ t: 'menor',        alts: ['más bajo', 'inferior'],           pos: 'adj.'  },
+      'stärkere':  { t: 'más fuerte',   alts: ['mayor', 'más intenso'],          pos: 'adj.'  },
+      'stärkeren': { t: 'más fuertes',  alts: ['mayores'],                        pos: 'adj.'  },
+      'schnellere':{ t: 'más rápido',   alts: ['más veloz'],                      pos: 'adj.'  },
+      'bessere':   { t: 'mejor',        alts: ['mejores'],                        pos: 'adj.'  },
+      'besseren':  { t: 'mejores',      alts: [],                                  pos: 'adj.'  },
+      'schlechtere':{ t: 'peor',        alts: ['peores'],                         pos: 'adj.'  },
+      'geringere': { t: 'menor',        alts: ['más reducido', 'inferior'],       pos: 'adj.'  },
+      'geringeren':{ t: 'menores',      alts: ['más reducidos'],                  pos: 'adj.'  },
+      // German ordinal adjectives — never proper nouns
+      'erster':   { t: 'primero',    alts: [],                                    pos: 'adj.'  },
+      'erste':    { t: 'primero',    alts: ['primera'],                           pos: 'adj.'  },
+      'ersten':   { t: 'primeros',   alts: ['primeras', 'primera'],               pos: 'adj.'  },
+      'erstem':   { t: 'primero',    alts: [],                                    pos: 'adj.'  },
+      'erstes':   { t: 'primero',    alts: [],                                    pos: 'adj.'  },
+      'zweiter':  { t: 'segundo',    alts: [],                                    pos: 'adj.'  },
+      'zweite':   { t: 'segundo',    alts: ['segunda'],                           pos: 'adj.'  },
+      'zweiten':  { t: 'segundos',   alts: ['segunda'],                           pos: 'adj.'  },
+      'dritter':  { t: 'tercero',    alts: [],                                    pos: 'adj.'  },
+      'dritte':   { t: 'tercero',    alts: ['tercera'],                           pos: 'adj.'  },
+      'dritten':  { t: 'terceros',   alts: ['tercera'],                           pos: 'adj.'  },
+      'vierter':  { t: 'cuarto',     alts: [],                                    pos: 'adj.'  },
+      'vierte':   { t: 'cuarto',     alts: ['cuarta'],                            pos: 'adj.'  },
+      'vierten':  { t: 'cuartos',    alts: [],                                    pos: 'adj.'  },
+      'fünfter':  { t: 'quinto',     alts: [],                                    pos: 'adj.'  },
+      'fünfte':   { t: 'quinto',     alts: ['quinta'],                            pos: 'adj.'  },
+      'letzter':  { t: 'último',     alts: [],                                    pos: 'adj.'  },
+      'letzte':   { t: 'último',     alts: ['última'],                            pos: 'adj.'  },
+      'letzten':  { t: 'últimos',    alts: ['última'],                            pos: 'adj.'  },
+      'nächster': { t: 'próximo',    alts: [],                                    pos: 'adj.'  },
+      'nächste':  { t: 'próximo',    alts: ['próxima'],                           pos: 'adj.'  },
+      'nächsten': { t: 'próximos',   alts: ['siguiente'],                         pos: 'adj.'  },
+      // Common German verb infinitives — GT often mistranslates these in short contexts
+      'wirken':   { t: 'actuar',      alts: ['funcionar', 'tener efecto'],        pos: 'v.'    },
+      'wirkt':    { t: 'actúa',       alts: ['funciona', 'tiene efecto'],          pos: 'v.'    },
+      'wirken auf':{ t: 'afectar a',  alts: ['influir en'],                        pos: 'v.'    },
+      'steigen':  { t: 'subir',       alts: ['aumentar', 'ascender'],              pos: 'v.'    },
+      'steigt':   { t: 'sube',        alts: ['aumenta'],                           pos: 'v.'    },
+      'sinken':   { t: 'bajar',       alts: ['descender', 'disminuir'],            pos: 'v.'    },
+      'sinkt':    { t: 'baja',        alts: ['desciende', 'disminuye'],            pos: 'v.'    },
+      'wachsen':  { t: 'crecer',      alts: ['aumentar'],                          pos: 'v.'    },
+      'wächst':   { t: 'crece',       alts: ['aumenta'],                           pos: 'v.'    },
+      'fallen':   { t: 'caer',        alts: ['bajar', 'descender'],                pos: 'v.'    },
+      'fällt':    { t: 'cae',         alts: ['baja'],                              pos: 'v.'    },
+      'fordern':  { t: 'exigir',      alts: ['reclamar', 'pedir'],                 pos: 'v.'    },
+      'fordert':  { t: 'exige',       alts: ['reclama', 'pide'],                   pos: 'v.'    },
+      'warnen':   { t: 'advertir',    alts: ['alertar'],                           pos: 'v.'    },
+      'warnt':    { t: 'advierte',    alts: ['alerta'],                            pos: 'v.'    },
+      'drohen':   { t: 'amenazar',    alts: ['arriesgar'],                         pos: 'v.'    },
+      'droht':    { t: 'amenaza',     alts: ['pende'],                             pos: 'v.'    },
+      'scheitern':{ t: 'fracasar',    alts: ['fallar'],                            pos: 'v.'    },
+      'scheitert':{ t: 'fracasa',     alts: ['falla'],                             pos: 'v.'    },
+      'kämpfen':  { t: 'luchar',      alts: ['combatir', 'pelear'],                pos: 'v.'    },
+      'kämpft':   { t: 'lucha',       alts: ['combate'],                           pos: 'v.'    },
+      'treffen':  { t: 'encontrarse', alts: ['reunirse', 'acordar'],               pos: 'v.'    },
+      'trifft':   { t: 'se encuentra',alts: ['reúne', 'acuerda'],                  pos: 'v.'    },
+      'einigen':  { t: 'acordar',     alts: ['ponerse de acuerdo'],                pos: 'v.'    },
+      'einigt':   { t: 'acuerda',     alts: ['se pone de acuerdo'],                pos: 'v.'    },
+      'belasten': { t: 'perjudicar',  alts: ['gravar', 'cargar'],                  pos: 'v.'    },
+      'belastet': { t: 'perjudica',   alts: ['grava', 'carga'],                    pos: 'v.'    },
+      'betreffen':{ t: 'afectar',     alts: ['concernir'],                         pos: 'v.'    },
+      'betrifft': { t: 'afecta',      alts: ['concierne'],                         pos: 'v.'    },
+      // German strong verb Präteritum (irregular past tense) — GT often mistranslates these
+      // because they look like unrelated words (e.g. "stieg"→"rose"→"rosa")
+      'stieg':    { t: 'subió',       alts: ['aumentó', 'ascendió'],              pos: 'v.'    },
+      'stiegen':  { t: 'subieron',    alts: ['aumentaron'],                       pos: 'v.'    },
+      'fiel':     { t: 'cayó',        alts: ['bajó', 'descendió'],                pos: 'v.'    },
+      'fielen':   { t: 'cayeron',     alts: ['bajaron'],                          pos: 'v.'    },
+      'sank':     { t: 'bajó',        alts: ['cayó', 'descendió'],                pos: 'v.'    },
+      'sanken':   { t: 'bajaron',     alts: ['cayeron'],                          pos: 'v.'    },
+      'stieg an': { t: 'aumentó',     alts: ['subió'],                            pos: 'v.'    },
+      'wuchs':    { t: 'creció',      alts: ['aumentó'],                          pos: 'v.'    },
+      'wuchsen':  { t: 'crecieron',   alts: ['aumentaron'],                       pos: 'v.'    },
+      'kam':      { t: 'llegó',       alts: ['vino'],                             pos: 'v.'    },
+      'kamen':    { t: 'llegaron',    alts: ['vinieron'],                         pos: 'v.'    },
+      'ging':     { t: 'fue',         alts: ['marchó', 'se fue'],                 pos: 'v.'    },
+      'gingen':   { t: 'fueron',      alts: ['marcharon'],                        pos: 'v.'    },
+      'stand':    { t: 'estuvo',      alts: ['estaba', 'se encontraba'],          pos: 'v.'    },
+      'standen':  { t: 'estuvieron',  alts: ['estaban'],                          pos: 'v.'    },
+      'war':      { t: 'era',         alts: ['fue', 'estaba'],                    pos: 'v.'    },
+      'waren':    { t: 'eran',        alts: ['fueron', 'estaban'],                pos: 'v.'    },
+      'hatte':    { t: 'tenía',       alts: ['tuvo'],                             pos: 'v.'    },
+      'hatten':   { t: 'tenían',      alts: ['tuvieron'],                         pos: 'v.'    },
+      'wurde':    { t: 'fue',         alts: ['se convirtió', 'resultó'],          pos: 'v.'    },
+      'wurden':   { t: 'fueron',      alts: ['se convirtieron'],                  pos: 'v.'    },
+      'blieb':    { t: 'quedó',       alts: ['permaneció', 'siguió'],             pos: 'v.'    },
+      'blieben':  { t: 'quedaron',    alts: ['permanecieron'],                    pos: 'v.'    },
+      'brachte':  { t: 'trajo',       alts: ['llevó'],                            pos: 'v.'    },
+      'brachten': { t: 'trajeron',    alts: ['llevaron'],                         pos: 'v.'    },
+      'sprach':   { t: 'habló',       alts: ['dijo'],                             pos: 'v.'    },
+      'sprachen': { t: 'hablaron',    alts: ['dijeron'],                          pos: 'v.'    },
+      'zog':      { t: 'se fue',      alts: ['se trasladó', 'atrajo'],            pos: 'v.'    },
+      'zogen':    { t: 'se fueron',   alts: ['se trasladaron'],                   pos: 'v.'    },
+      'brach':    { t: 'rompió',      alts: ['estalló', 'quebró'],                pos: 'v.'    },
+      'brachen':  { t: 'rompieron',   alts: ['estallaron'],                       pos: 'v.'    },
+      'starb':    { t: 'murió',       alts: ['falleció'],                         pos: 'v.'    },
+      'starben':  { t: 'murieron',    alts: ['fallecieron'],                      pos: 'v.'    },
+      'nahm':     { t: 'tomó',        alts: ['asumió', 'aceptó'],                 pos: 'v.'    },
+      'nahmen':   { t: 'tomaron',     alts: ['asumieron'],                        pos: 'v.'    },
+      'gab':      { t: 'dio',         alts: ['hubo', 'había'],                    pos: 'v.'    },
+      'gaben':    { t: 'dieron',      alts: [],                                    pos: 'v.'    },
+      'sah':      { t: 'vio',         alts: ['observó'],                          pos: 'v.'    },
+      'sahen':    { t: 'vieron',      alts: [],                                    pos: 'v.'    },
+      'hielt':    { t: 'mantuvo',     alts: ['celebró', 'sostuvo'],               pos: 'v.'    },
+      'hielten':  { t: 'mantuvieron', alts: ['celebraron'],                       pos: 'v.'    },
+      'ließ':     { t: 'dejó',        alts: ['permitió', 'mandó'],                pos: 'v.'    },
+      'ließen':   { t: 'dejaron',     alts: ['permitieron'],                      pos: 'v.'    },
+      'traf':     { t: 'encontró',    alts: ['se reunió con', 'golpeó'],          pos: 'v.'    },
+      'trafen':   { t: 'encontraron', alts: ['se reunieron'],                     pos: 'v.'    },
+      'fand':     { t: 'encontró',    alts: ['halló'],                            pos: 'v.'    },
+      'fanden':   { t: 'encontraron', alts: ['hallaron'],                         pos: 'v.'    },
+      'schloss':  { t: 'cerró',       alts: ['concluyó', 'firmó'],                pos: 'v.'    },
+      'schlossen':{ t: 'cerraron',    alts: ['concluyeron'],                      pos: 'v.'    },
+      'warf':     { t: 'lanzó',       alts: ['tiró', 'arrojó'],                   pos: 'v.'    },
+      'warfen':   { t: 'lanzaron',    alts: [],                                    pos: 'v.'    },
+      'rief':     { t: 'llamó',       alts: ['convocó', 'gritó'],                 pos: 'v.'    },
+      'riefen':   { t: 'llamaron',    alts: [],                                    pos: 'v.'    },
+      'schrieb':  { t: 'escribió',    alts: ['redactó'],                          pos: 'v.'    },
+      'schrieben':{ t: 'escribieron', alts: [],                                    pos: 'v.'    },
+      'lief':     { t: 'corrió',      alts: ['funcionó', 'fue'],                  pos: 'v.'    },
+      'liefen':   { t: 'corrieron',   alts: ['funcionaron'],                      pos: 'v.'    },
+      'zeigte':   { t: 'mostró',      alts: ['indicó', 'señaló'],                 pos: 'v.'    },
+      'zeigten':  { t: 'mostraron',   alts: ['indicaron'],                        pos: 'v.'    },
+      // German past participles used as predicate verbs in headlines (ge-...-en forms)
+      'geborgen':  { t: 'rescatado',    alts: ['recuperado', 'puesto a salvo'],   pos: 'v.'    },
+      'gefunden':  { t: 'encontrado',   alts: ['hallado'],                        pos: 'v.'    },
+      'gestorben': { t: 'fallecido',    alts: ['muerto', 'ha muerto'],            pos: 'v.'    },
+      'getötet':   { t: 'muerto',       alts: ['asesinado', 'matado'],            pos: 'v.'    },
+      'verhaftet': { t: 'arrestado',    alts: ['detenido'],                       pos: 'v.'    },
+      'festgenommen': { t: 'detenido',  alts: ['arrestado'],                      pos: 'v.'    },
+      'verletzt':  { t: 'herido',       alts: ['lesionado'],                      pos: 'v.'    },
+      'verloren':  { t: 'perdido',      alts: ['extraviado'],                     pos: 'v.'    },
+      'gewonnen':  { t: 'ganado',       alts: ['conquistado'],                    pos: 'v.'    },
+      'geschlossen':{ t: 'cerrado',     alts: ['clausurado'],                     pos: 'v.'    },
+      'geöffnet':  { t: 'abierto',      alts: ['inaugurado'],                     pos: 'v.'    },
+      'gestürzt':  { t: 'caído',        alts: ['derrocado', 'se ha caído'],       pos: 'v.'    },
+      'entlassen': { t: 'despedido',    alts: ['liberado', 'dado de alta'],       pos: 'v.'    },
+      'gesperrt':  { t: 'bloqueado',    alts: ['cerrado', 'prohibido'],           pos: 'v.'    },
+      'genehmigt': { t: 'aprobado',     alts: ['autorizado'],                     pos: 'v.'    },
+      'abgelehnt': { t: 'rechazado',    alts: ['denegado'],                       pos: 'v.'    },
+      'beschlossen':{ t: 'decidido',    alts: ['acordado', 'resuelto'],           pos: 'v.'    },
+      'angeklagt': { t: 'acusado',      alts: ['imputado'],                       pos: 'v.'    },
+      'verurteilt':{ t: 'condenado',    alts: ['sentenciado'],                    pos: 'v.'    },
+      'freigesprochen': { t: 'absuelto', alts: ['declarado inocente'],            pos: 'v.'    },
+      'gestohlen': { t: 'robado',       alts: ['hurtado'],                        pos: 'v.'    },
+      'gerettet':  { t: 'rescatado',    alts: ['salvado'],                        pos: 'v.'    },
+      'ertrunken': { t: 'ahogado',      alts: ['muerto por ahogamiento'],         pos: 'v.'    },
+      'verunglückt':{ t: 'accidentado', alts: ['herido en accidente', 'fallecido en accidente'], pos: 'v.' },
           'deswegen':{ t: 'por eso',       alts: ['por esa razón'],                  pos: 'conj.' },
           'außerdem':{ t: 'además',        alts: ['por otro lado'],                  pos: 'conj.' },
           // Correlativas y grados
@@ -586,6 +775,20 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
         }
         const _entry = _langWords[_wordLow];
         if (_entry) {
+          // Translate context phrase so the tooltip can show it in the target language
+          let _ctxTranslation = null;
+          const _ctxSource = sentence || context || null;
+          if (_ctxSource && targetLang && _effectiveSrc && _effectiveSrc !== targetLang) {
+            try {
+              const _ctxRes = await fetch(
+                `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${_effectiveSrc}&tl=${targetLang}&dt=t&q=${encodeURIComponent(_ctxSource)}`
+              );
+              if (_ctxRes.ok) {
+                const _ctxData = await _ctxRes.json();
+                _ctxTranslation = (_ctxData[0] || []).map(t => t?.[0] || '').join('').trim() || null;
+              }
+            } catch {}
+          }
           return {
             translation: _entry.t,
             alternatives: _entry.alts,
@@ -594,8 +797,8 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
             definition: null,
             extractedTranslation: null,
             contextPhrase: context || null,
-            contextTranslation: null,
-            sentenceTranslation: null,
+            contextTranslation: _ctxTranslation,
+            sentenceTranslation: _ctxTranslation,
             sentenceExtracted: null,
             posGroups: [{ pos: _entry.pos, translations: [_entry.t, ..._entry.alts] }],
             isGermanPage: _effectiveSrc === 'de',
@@ -685,8 +888,13 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
     'DM':   { wiki: 'Deutsche Mark',               names: { de: 'DM',         en: 'DM',          fr: 'DM',         es: 'DM' } },
   };
   // All-caps multi-word (e.g. "REINO UNIDO") are also proper nouns — normalize for lookup.
+  // German comparative/superlative adjectives (e.g. "Längere Frist") start with uppercase
+  // in headlines but are NOT proper nouns. Detect by -ere/-eren/-erer/-esten etc. ending.
+  const _firstToken = word.split(' ')[0].toLowerCase();
+  const _isGermanAdjective = /(?:ere|erer|erem|eren|eres|este|esten|ester|estem|estes|liche|lichen|liches|lichem|licher|ster|sten|stem|stes)$/i.test(_firstToken) && _firstToken.length > 4;
   const isMultiWordProperNoun = word.includes(' ') &&
-    word[0] === word[0].toUpperCase() && word[0] !== word[0].toLowerCase();
+    word[0] === word[0].toUpperCase() && word[0] !== word[0].toLowerCase() &&
+    !_isGermanAdjective;
   if (isMultiWordProperNoun) {
     // Strip common leading articles ("La UE" → "UE", "El Niño" → "Niño") and
     // process the core. Avoids "La UE" being looked up as a proper name.
@@ -708,7 +916,7 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
         };
       }
       // Otherwise, look up the core word without the article
-      const coreDef = await lookupDefinition(coreWord, targetLang, context);
+ const coreDef = await lookupDefinition(coreWord, targetLang, context);
       if (coreDef) return {
         translation: null, alternatives: [], translatable: false, sameLanguage: false,
         definition: coreDef,
@@ -717,7 +925,7 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
         sentenceTranslation: null, sentenceExtracted: null
       };
     }
-    const definition = await lookupDefinition(word, targetLang, context);
+ const definition = await lookupDefinition(word, targetLang, context);
     if (definition) {
       return {
         translation: null, alternatives: [], translatable: false, sameLanguage: false,
@@ -752,7 +960,13 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
     // finds "Starmer" → Keir Starmer via the genitive-strip in lookupWikipediaPersonFallback.
     const isFirstCapitalized = firstWord.length >= 2 &&
       firstWord[0] === firstWord[0].toUpperCase() && firstWord[0] !== firstWord[0].toLowerCase();
-    if (isFirstCapitalized) {
+    const _firstTokenLow2 = firstWord.toLowerCase();
+    const _isGermanAdjFirst = /(?:ere|erer|erem|eren|eres|este|esten|ester|estem|estes|liche|lichen|liches|lichem|licher)$/i.test(_firstTokenLow2) && _firstTokenLow2.length > 4;
+    // If ALL words in the phrase are capitalized (e.g. "Tamara Flores"), it looks like a person
+    // name for which Wikipedia had no direct article. Looking up just the first name ("Tamara")
+    // would find a random famous person with that first name (e.g. "Tamara Živković") — skip.
+    const _allCapWords = word.split(/\s+/).every(w => w.length >= 2 && w[0] === w[0].toUpperCase() && w[0] !== w[0].toLowerCase());
+    if (isFirstCapitalized && !_isGermanAdjFirst && !_allCapWords) {
       // Pass null context so extractFullName doesn't expand "Starmers" → "Starmers Rücktritt"
       // (which causes full-text search to find wrong article like "2025 German federal election")
       const firstWordDef = await lookupDefinition(firstWord, targetLang, null);
@@ -829,11 +1043,36 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
       };
     }
 
+    // Parenthetical expansion: detect "Full Name (WORD)" or "WORD (Full Name)" in sentence/context.
+    // Handles cases like "Institut für Höhere Studien (IHS)" or "WIFO (Wirtschaftsforschungsinstitut)"
+    // where the article itself defines the abbreviation — no Wikipedia needed.
+    {
+      const _esc = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      let _exp = null;
+      for (const _txt of [sentence, context].filter(Boolean)) {
+        // Pattern 1: "Some Long Name (WORD)" — expansion precedes abbreviation
+        const _m1 = _txt.match(new RegExp('([A-ZÄÖÜ][\\w\\s\\-äöüÄÖÜß,\\.]{5,80})\\s*\\(' + _esc + '\\)', 'i'));
+        if (_m1) { _exp = _m1[1].trim(); break; }
+        // Pattern 2: "WORD (Some Long Name)" — expansion follows abbreviation
+        const _m2 = _txt.match(new RegExp('(?:^|[\\s,;])' + _esc + '\\s*\\(([A-ZÄÖÜ][^)]{5,80})\\)', 'i'));
+        if (_m2) { _exp = _m2[1].trim(); break; }
+      }
+      if (_exp) {
+        return {
+          translation: null, alternatives: [], translatable: false, sameLanguage: false,
+          definition: [{ text: _exp, title: word }],
+          extractedTranslation: null,
+          contextPhrase: context || null, contextTranslation: null,
+          sentenceTranslation: null, sentenceExtracted: null
+        };
+      }
+    }
+
     // For 2-3 letter ALL-CAPS acronyms, run context-aware search FIRST.
     // lookupDefinition may find a wrong article (e.g. "Project Management" for "PM")
     // before the context-aware search gets a chance to find "Prime Minister".
     if (/^[A-Z]{2,3}$/.test(word)) {
-      const acronymSearch = await lookupWikipediaAcronymSearch(word, context, targetLang);
+      const acronymSearch = await lookupWikipediaAcronymSearch(word, context, targetLang, pageLang);
       if (acronymSearch) {
         return {
           translation: null, alternatives: [], translatable: false, sameLanguage: false,
@@ -846,20 +1085,65 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
         };
       }
     }
-    // Longer acronyms (NATO, FBI, etc.): use Wikipedia direct lookup
-    const acronymDef = await lookupDefinition(word, targetLang, context);
-    if (acronymDef && acronymDef.length > 0) {
+    // Longer acronyms (WIFO, NATO, FBI, etc.): search page-lang and target-lang Wikipedia only.
+    // Do NOT fall back to English Wikipedia — it often returns a completely different article
+    // for the same acronym (e.g. WIFO → radio station in Georgia, IHS → Christogram).
+    {
+      const _aLangs = [...new Set([pageLang, targetLang].filter(l => l && l !== 'en'))];
+      if (targetLang === 'en') _aLangs.push('en');
+      let _aResult = null;
+      for (const _lang of _aLangs) {
+        const _r = await fetchWikiSummary(word, _lang);
+        if (_r && _wikiTitleMatchesQuery(_r.title, word) && _wikiLastWordMatch(_r.title, word)) {
+          _aResult = _r; break;
+        }
+      }
+      if (_aResult) {
+        return {
+          translation: null, alternatives: [], translatable: false, sameLanguage: false,
+          definition: [_aResult],
+          extractedTranslation: null,
+          contextPhrase: context || null,
+          contextTranslation: null,
+          sentenceTranslation: null,
+          sentenceExtracted: null
+        };
+      }
+    }
+    // No Wikipedia result — check if this is a proper noun context (adjacent ALL-CAPS word).
+    // If so, return "not found" immediately rather than falling through to GT (which will
+    // misidentify surnames as German words, e.g. TAMARA→"tamara", FLORES→"siesta").
+    if (context) {
+      const _ctxToks2 = context.trim().split(/\s+/);
+      const _wi2 = _ctxToks2.findIndex(t => t.toUpperCase() === word.toUpperCase());
+      const _capTok = t => t.length >= 2 && /^[A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖÙÚÛÜÝÞ]{2,}$/.test(t);
+      const _nbr = _wi2 !== -1 && (
+        (_wi2 > 0 && _capTok(_ctxToks2[_wi2 - 1])) ||
+        (_wi2 < _ctxToks2.length - 1 && _capTok(_ctxToks2[_wi2 + 1]))
+      );
+      if (_nbr) {
+        return {
+          translation: null, alternatives: [], translatable: false, sameLanguage: false,
+          definition: null,
+          extractedTranslation: null,
+          contextPhrase: context || null,
+          contextTranslation: null,
+          sentenceTranslation: null,
+          sentenceExtracted: null
+        };
+      }
+    }
+    // Case 2: no context at all + no Wikipedia → unreliable to fall through to GT.
+    // For 5+ letter all-alpha words (likely names/proper nouns), return sin datos.
+    if (!context && word.length >= 5 && /^[A-Za-zÀ-ÖØ-öø-ÿ]+$/.test(word)) {
       return {
         translation: null, alternatives: [], translatable: false, sameLanguage: false,
-        definition: acronymDef,
-        extractedTranslation: null,
-        contextPhrase: context || null,
-        contextTranslation: null,
-        sentenceTranslation: null,
-        sentenceExtracted: null
+        definition: null, extractedTranslation: null,
+        contextPhrase: null, contextTranslation: null,
+        sentenceTranslation: null, sentenceExtracted: null
       };
     }
-    // No Wikipedia result — fall through to normal GT translation
+    // Fall through to normal GT translation
   }
 
   // Normalize word to lowercase before sending to translation API.
@@ -1006,7 +1290,6 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
       if (anchored) wordPosGroups = supplemented;
     }
   }
-
   const phraseRawFull = phraseResult.status === 'fulfilled' ? phraseResult.value : null;
   const phraseRaw     = phraseRawFull?.text ?? phraseRawFull ?? null;
   const phraseChunks  = phraseRawFull?.chunks ?? null;
@@ -1042,7 +1325,7 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   // Reject multi-word sentenceExtracted (> 3 words): sentence-level chunk alignment can
   // return an entire clause (e.g. "Fluten" → "con inundaciones y sequías globales").
   // Single or 2-3 word results are reliable; longer results are almost always noise.
-  if (sentenceExtracted && sentenceExtracted.trim().split(/\s+/).length > 3) {
+  if (sentenceExtracted && sentenceExtracted.trim().split(/\s+/).length > 2) {
     sentenceExtracted = null;
   }
   if (!sentenceExtracted && sentenceRaw && sentMinusRaw) {
@@ -1143,6 +1426,40 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
           const conjugated = candidates.filter(t => !/(?:ar|er|ir)$/i.test(t));
           if (conjugated.length === 1) sentenceExtracted = conjugated[0];
         }
+      }
+
+      // Reject sentenceExtracted that is a Spanish adverb/function word — these are false
+      // positives from co-occurring words like "auch"→"también" overshadowing the verb.
+      const _SPANISH_ADV_REJECT = new Set([
+        // adverbs
+        'también','tampoco','ya','aún','aun','solo','sólo','más','menos','muy','bien',
+        'mal','así','aquí','allí','allá','acá','nunca','siempre','jamás','quizás',
+        'ahora','antes','después','luego','hoy','ayer','mañana','incluso','hasta',
+        'apenas','casi','justo','precisamente','exactamente','realmente','finalmente',
+        'además','mientras','entonces','pues','aunque','sin embargo','no obstante',
+        // determiners / quantifiers / pronouns (false-positive diff artifacts)
+        'algunos','algunas','alguno','alguna','algún','varios','varias',
+        'muchos','muchas','mucho','mucha','pocos','pocas','poco','poca',
+        'unos','unas','todos','todas','todo','toda','ciertos','ciertas',
+        'ambos','ambas','demás','otro','otra','otros','otras',
+        'nadie','nada','alguien','algo','cualquier','cualquiera',
+        // articles and prepositions that slip through
+        'del','al','de','en','con','por','para','que','como','pero','sino',
+      ]);
+      const _isGermanLowerOutside = !_wordStartsUpper &&
+        (sourceLang === 'de' || pageLang === 'de' || pageLang?.startsWith('de-'));
+      if (sentenceExtracted && _isGermanLowerOutside &&
+          _SPANISH_ADV_REJECT.has(sentenceExtracted.toLowerCase().trim())) {
+        sentenceExtracted = null;
+      }
+
+      // Reject extractedTranslation / sentenceExtracted that are loanwords or proper nouns
+      // already present in the source text (e.g. "besetzt"→"dubái" when "Dubai" is in context).
+      // Strip accents and compare; if the translation matches a source token → false positive.
+      const _normAccents = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+      const _srcTokens = new Set(((context || '') + ' ' + (sentence || '')).split(/\W+/).map(_normAccents).filter(t => t.length > 1));
+      if (sentenceExtracted && _srcTokens.has(_normAccents(sentenceExtracted.trim()))) {
+        sentenceExtracted = null;
       }
 
       // Stem-based fallback: runs after ALL branches when sentenceExtracted is still null.
@@ -1276,8 +1593,24 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   // Chunk extraction always uses the DIRECT phrase translation (never pivoted), so
   // it's independent of any pivot error in the isolated word step.
   const extractedFromChunks = extractWordFromChunks(word, phraseChunks);
-  const extractedTranslation = extractedFromChunks
+  let extractedTranslation = extractedFromChunks
     || (usePivot ? null : extractWordFromContext(word, context, phraseRaw)); // positional fallback only for non-pivot
+
+  // Reject extracted translation if it's a loanword/proper noun already in the source
+  // (e.g. "besetzt"→"dubái" when "Dubai" is in the German context — false positive from diff)
+  if (extractedTranslation) {
+    const _normAcc = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const _srcText = (context || '') + ' ' + (sentence || '');
+    const _srcToks = new Set(_srcText.split(/\W+/).map(_normAcc).filter(t => t.length > 2));
+    const _extNorm = _normAcc(extractedTranslation.trim());
+    if (_srcToks.has(_extNorm)) {
+      extractedTranslation = null;
+    }
+    // Reject sentence fragments (3+ words) — chunk alignment captured multiple tokens
+    if (extractedTranslation && extractedTranslation.trim().split(/\s+/).length > 2) {
+      extractedTranslation = null;
+    }
+  }
 
   // Pivot validation: the phrase is always translated DIRECTLY (sv→es), so phraseRaw
   // reflects the true meaning in context. If the pivot result (isolated word) doesn't
@@ -1288,6 +1621,95 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   // Note: extractWordFromContext is only used here for pivot validation — NOT returned as
   // extractedTranslation (which would let content.js re-override the corrected result).
   let finalWordTranslation = wordTranslation;
+
+  // ALL-CAPS word adjacent to another ALL-CAPS word in context → proper noun phrase.
+  // e.g. "FLORES" in "TAMARA FLORES", "TAMARA" in "TAMARA FLORES ist eine..."
+  // GT misidentifies surnames as German common words (FLORES→"siesta", TAMARA→"tamara").
+  // Suppress GT translation so lookupDefinition (Wikipedia + fullName check) handles it.
+  if (isAllCaps && !word.includes(' ') && context) {
+    const _ctxToks = context.trim().split(/\s+/);
+    const _wordIdx = _ctxToks.findIndex(t => t.toUpperCase() === word.toUpperCase());
+    const _isAllCapsToken = t => t.length >= 2 && /^[A-ZÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖÙÚÛÜÝÞ]{2,}$/.test(t);
+    const _hasCapNeighbor = _wordIdx !== -1 && (
+      (_wordIdx > 0 && _isAllCapsToken(_ctxToks[_wordIdx - 1])) ||
+      (_wordIdx < _ctxToks.length - 1 && _isAllCapsToken(_ctxToks[_wordIdx + 1]))
+    );
+    if (_hasCapNeighbor) {
+      finalWordTranslation = null;
+      wordPosGroups = [];
+      wordAlts = [];
+    }
+  }
+
+  // German Präteritum lemma fallback: for German lowercase verbs ending in -te/-ten,
+  // GT often mistranslates the conjugated form (e.g. "sparte"→"salvado" instead of "ahorrar").
+  // Strip the past tense suffix, translate the infinitive, and use it if it looks like
+  // a proper Spanish infinitive. Runs after all GT results are available.
+  {
+    const _isDE = pageLang === 'de' || pageLang?.startsWith('de-') || sourceLang === 'de';
+    const _isLower = !_wordStartsUpper;
+    if (_isDE && _isLower && targetLang === 'es') {
+      const _wl = word.toLowerCase();
+      let _inf = null;
+      // Only -te (3rd person singular weak past: "sparte"→"sparen", "sagte"→"sagen").
+      // Skip -ten: also the weak adjective ending ("verbreiteten","bekannten") → false positives.
+      if (_wl.endsWith('te') && !_wl.endsWith('ste') && _wl.length > 4) {
+        _inf = _wl.slice(0,-2) + 'en';
+      }
+      if (_inf) {
+        try {
+          const _ir = await fetch(
+            `https://translate.googleapis.com/translate_a/single?client=gtx&sl=de&tl=es&dt=t&q=${encodeURIComponent(_inf)}`
+          );
+          if (_ir.ok) {
+            const _id = await _ir.json();
+            const _it = (_id[0]||[]).map(t=>t?.[0]||'').join('').trim().toLowerCase();
+            // Accept only proper Spanish infinitives (-ar/-er/-ir) to avoid false positives
+            if (_it && /(?:ar|er|ir)$/i.test(_it) && _it !== _inf) {
+              finalWordTranslation = _it;
+              effectiveAlts = [];
+            }
+          }
+        } catch {}
+      }
+    }
+
+    // German weak adjective -en ending: "verbreiteten"→"verbreitet"→"extendido".
+    if (_isDE && _isLower && targetLang === 'es' &&
+        (/(?:ar|er|ir)$/i.test(finalWordTranslation || '') || /(?:ó|aron|ieron)$/.test(finalWordTranslation || '')) &&
+        word.length > 5 && word.toLowerCase().endsWith('en') &&
+        !word.toLowerCase().endsWith('ieren')) {
+      const _base = word.slice(0, -2);
+      // Only apply if base looks like a German past participle or strong participle
+      // (ends in -t, -et, -d, -gt, -cht, -ng, -en) — NOT a bare verb stem like "besitz", "erreich"
+      // This prevents "besitzen"→"besitz"→"propio" false positive
+      const _looksLikeParticiple = /(?:et|igt|cht|ngt|ert|iert|ssen|ffen|gen|ten|nden|hten|lten|rten|enden|enden|ten|nen|en)$/i.test(_base);
+      if (_looksLikeParticiple) try {
+        const _br = await fetch(
+          `https://translate.googleapis.com/translate_a/single?client=gtx&sl=de&tl=es&dt=t&q=${encodeURIComponent(_base)}`
+        );
+        if (_br.ok) {
+          const _bd = await _br.json();
+          const _bt = (_bd[0]||[]).map(t=>t?.[0]||'').join('').trim().toLowerCase();
+          // If base gives non-infinitive → use directly; if still infinitive → convert to past participle (adjective)
+          if (_bt && _bt.length > 2 && _bt !== _base.toLowerCase()) {
+            if (!/(?:ar|er|ir)$/i.test(_bt)) {
+              // Not a Spanish infinitive — use directly (could be adj like "llegado", noun, etc.)
+              finalWordTranslation = _bt;
+              effectiveAlts = [];
+            } else {
+              // Still a Spanish infinitive → convert to past participle (adjective form)
+              // "desparramar"→"desparramado", "difundir"→"difundido"
+              const _part = /ar$/i.test(_bt) ? _bt.slice(0,-2)+'ado' : _bt.slice(0,-2)+'ido';
+              finalWordTranslation = _part;
+              effectiveAlts = [];
+            }
+          }
+        }
+      } catch(e) { }
+    }
+  }
+
   // Pivot validation: the context phrase is translated DIRECTLY (de→es, no pivot), so
   // phraseRaw reflects the true contextual meaning. If the pivot result doesn't appear
   // there (nor any of its synonyms), the pivot likely got a wrong word sense and we
@@ -1463,7 +1885,7 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
     }
   }
 
-  if (!finalWordTranslation && !phraseRaw) {
+ if (!finalWordTranslation && !phraseRaw) {
     // No usable translation — look up definition anyway (useful for same-language case)
     const definition = await lookupDefinition(word, targetLang, context);
     const _fnFull = context ? extractFullName(word, context) : word;
@@ -1501,26 +1923,26 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
       }
     } catch { /* keep null */ }
   }
-
   // Cognate-company override: if a capitalized word (≥6 chars) translated to a near-cognate
   // (same 3-char normalized stem), GT may have treated a company/org name as a common word
   // via shared etymology (e.g. "Anthropic" → "antrópico" via Greek ánthrōpos).
   // Check Wikipedia proactively; if it confirms the word is an organization, prefer that
   // over the GT adjective translation.
   let definition = null;
-  if (isCapitalized && finalWordTranslation && !word.includes(' ') && wordForApi.length >= 6) {
+  if (isCapitalized && finalWordTranslation && !word.includes(' ') && wordForApi.length >= 4) {
     const normSrc3 = wordForApi.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '').substring(0, 3);
     const normTrx3 = finalWordTranslation.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '').substring(0, 3);
-    if (normSrc3.length === 3 && normSrc3 === normTrx3) {
+ if (normSrc3.length === 3 && normSrc3 === normTrx3) {
       const cogWiki = await lookupDefinition(word, targetLang, context);
       if (cogWiki && cogWiki.length > 0) {
-        const cogText = (cogWiki[0]?.text ?? String(cogWiki[0])) || '';
-        // Keywords in multiple languages — Wikipedia description may be in target language
-        const isOrgLike = /\b(company|corporation|founded|ai safety|artificial intelligence|startup|research lab|organization|institute|nonprofit|safety company|empresa|corporaci[oó]n|fundad[ao]|inteligencia artificial|organizaci[oó]n|investigaci[oó]n y desarrollo|soci[eé]t[eé]|entreprise|unternehmen|azienda)\b/i.test(cogText);
-        if (isOrgLike) {
-          definition = cogWiki;
-          // Keep finalWordTranslation — show both the cognate translation AND the Wikipedia definition
-        }
+        // Wikipedia confirmed this is a proper noun (place, person, org, etc.).
+        // Suppress the false cognate GT translation — the Wikipedia definition is more accurate.
+        // e.g. "Paris" → GT "par" (French cognate), Wikipedia "capital city of France" → show city.
+        definition = cogWiki;
+        finalWordTranslation = null;
+        wordPosGroups = [];
+        wordAlts = [];
+        effectiveAlts = [];
       }
     }
   }
@@ -1529,15 +1951,29 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   // -tum, -nis, -ling, -sal) — these are grammatically common nouns, never proper nouns.
   // e.g. "Abkühlung" suppressed by length-divergence → lookup finds "place in Kyrgyzstan" ✗
   const hasGermanNounSuffix = hasGermanNounSuffixEarly;
-  if (!definition && !finalWordTranslation && !hasGermanNounSuffix) {
+ if (!definition && !finalWordTranslation && !hasGermanNounSuffix) {
     definition = await lookupDefinition(word, targetLang, context);
   }
   // For capitalized proper nouns where GT returned the word unchanged (e.g. "Merz" → "Merz"),
   // still look up Wikipedia — the name has no translation but may have a definition.
   // The cognate check above requires ≥6 chars, so short names like "Merz" (4 chars) slip through.
-  if (!definition && isCapitalized && !word.includes(' ') &&
+ if (!definition && isCapitalized && !word.includes(' ') &&
       finalWordTranslation && finalWordTranslation.toLowerCase().trim() === word.toLowerCase().trim()) {
     definition = await lookupDefinition(word, targetLang, context);
+  }
+  // For capitalized single words where GT returned a MULTI-WORD phrase, GT likely
+  // misidentified a proper noun as a foreign common word (e.g. "Paris" → "a la par",
+  // treating French "paris" = bets). Check Wikipedia; if found, suppress GT translation.
+  if (!definition && isCapitalized && !word.includes(' ') && word.length >= 4 &&
+      finalWordTranslation && finalWordTranslation.includes(' ')) {
+    const _mwWiki = await lookupDefinition(word, targetLang, context);
+    if (_mwWiki && _mwWiki.length > 0) {
+      definition = _mwWiki;
+      finalWordTranslation = null;
+      wordPosGroups = [];
+      wordAlts = [];
+      effectiveAlts = [];
+    }
   }
 
   // German separable verb detection (Trennbare Verben)
@@ -1614,7 +2050,11 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
 
   // If GT has no dict entry (finalWordTranslation=null) but sentence diff extracted a clear
   // single-word translation, use it as primary (e.g. "Ausländerhass" → "xenofobia").
-  if (!finalWordTranslation && sentenceExtracted && !sentenceExtracted.includes(' ')) {
+  // Exception: skip for capitalized words with a Wikipedia definition — sentenceExtracted
+  // can pick up nearby words in the sentence rather than the hovered word's translation
+  // (e.g. "Sinkevicius als Premier nominiert" → "nominiert"→"nombrado" wrongly assigned).
+  if (!finalWordTranslation && sentenceExtracted && !sentenceExtracted.includes(' ')
+      && !(isCapitalized && definition)) {
     finalWordTranslation = sentenceExtracted;
     effectiveAlts = [];
   }
@@ -1628,7 +2068,6 @@ async function callProviderWithContext(word, context, settings, pageLang, senten
   // This flag lets content.js prefer noun POS groups and skip verb-biased logic.
   const isGermanNoun = isCapitalized && !isAllCaps &&
     (sourceLang === 'de' || pageLang === 'de' || pageLang?.startsWith('de-'));
-
   return {
     translation: finalWordTranslation,
     alternatives: finalWordTranslation ? effectiveAlts : [],
@@ -1820,6 +2259,9 @@ function extractFullName(word, context) {
         if (TITLE_WORDS.has(prev.toLowerCase())) break;
         if (prev.length >= 2 &&
             prev[0] === prev[0].toUpperCase() && prev[0] !== prev[0].toLowerCase()) {
+          // Stop if this token is a headline label (ends with : or other punctuation)
+          // e.g. "Litauen: SINKEVICIUS" → "Litauen:" should not be part of the name
+          if (/[,.:;!?»"'\)\]]$/.test(rawTok)) break;
           leftParts.unshift(prev);
           // Stop if the token before this one ended a sentence
           if (i > 0 && /[.!?]$/.test(tokens[i - 1])) break;
@@ -1829,7 +2271,6 @@ function extractFullName(word, context) {
       }
       if (leftParts.length > 0) name = leftParts.join(' ') + ' ' + name;
     }
-
     return name;
   } catch {
     return word;
@@ -1844,7 +2285,7 @@ function extractFullName(word, context) {
 // Full-text Wikipedia search for short acronyms (PM, EU, UN, etc.) that hit
 // disambiguation pages on direct lookup. Returns the most relevant non-geographic,
 // non-trivial article — e.g. "PM" → "Prime Minister".
-async function lookupWikipediaAcronymSearch(word, context = null, targetLang = 'en') {
+async function lookupWikipediaAcronymSearch(word, context = null, targetLang = 'en', pageLang = null) {
   // Detect political/title context:
   // "as UK PM" / "as PM" pattern → word is a title (Prime Minister, etc.)
   const escaped = word.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
@@ -1854,13 +2295,20 @@ async function lookupWikipediaAcronymSearch(word, context = null, targetLang = '
     /\b(minister|parliament|government|prime|premier|MP|cabinet|senate|congress|election|party|White\s+House|Downing|chancellor|president|official|nominee|appointed|confirmed)\b/i.test(context);
   const isPolitical = isUsedAsTitle || hasPoliticalKeywords;
 
-  // Fetch article — prefer target-language Wikipedia, fall back to English
+  // Fetch article — prefer page-language, then target-language. NO English fallback for acronyms:
+  // English Wikipedia may have a completely different meaning (e.g. IHS = Christogram, WIFO = radio station).
   const fetchBest = async (title) => {
+    if (pageLang && pageLang !== 'en' && pageLang !== targetLang) {
+      const r = await fetchWikiSummary(title, pageLang);
+      if (r) return r;
+    }
     if (targetLang && targetLang !== 'en') {
       const r = await fetchWikiSummary(title, targetLang);
       if (r) return r;
     }
-    return await fetchWikiSummary(title, 'en');
+    // Only use English if the user's target language IS English
+    if (targetLang === 'en') return await fetchWikiSummary(title, 'en');
+    return null;
   };
 
   const filterTitle = t => {
@@ -1904,11 +2352,25 @@ async function lookupWikipediaAcronymSearch(word, context = null, targetLang = '
 }
 
 async function lookupDefinition(word, targetLang = 'en', context = null) {
+  // Hard-coded overrides for words that Wikipedia disambiguates incorrectly.
+  // Add entries here when a word consistently returns the wrong article.
+  // Format: lowercase word → English Wikipedia article title to use directly.
+  const _PROPER_OVERRIDES = {
+    'paris': 'Paris', // es.wiki "Paris" = Trojan prince; en.wiki "Paris" = capital of France
+  };
+  const _ovTitle = _PROPER_OVERRIDES[word.toLowerCase()];
+  if (_ovTitle) {
+    // Always use English Wikipedia for overrides — target-lang may have a different/wrong article.
+    // e.g. es.wiki "Paris" = Trojan prince, en.wiki "Paris" = capital of France.
+    const _ovResult = await fetchWikiSummary(_ovTitle, 'en');
+    if (_ovResult) return [_ovResult];
+  }
   // For capitalized words, try to build the full name from surrounding context
   // e.g. "Donald" + context "Donald Trump prend la parole" → look up "Donald Trump"
   const isCapitalized = word.length >= 2 &&
     word[0] === word[0].toUpperCase() && word[0] !== word[0].toLowerCase();
 
+  let _fullNameTriedAndFailed = false;
   if (isCapitalized && context) {
     // Check for "El/La [word]" compound — handles "El Niño", "La Niña" (weather),
     // "El Chapo", "La Palma", etc. The word may appear ALL-CAPS in headlines.
@@ -1924,10 +2386,21 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
     // Don't expand common articles/prepositions (la, el, de, du, etc.) —
     // they cause false compounds like "La UE" (Spanish article + acronym).
     const isCommonFunctionWord = /^(la|le|les|el|los|las|de|du|des|il|lo|gli|di|da|das|die|der|ein|eine|une|un|the|a|an|al|del|dal|nel|sul)$/i.test(word);
-    const fullName = isCommonFunctionWord ? word : extractFullName(word, context);
+    let fullName = isCommonFunctionWord ? word : extractFullName(word, context);
+    // Strip leading articles from compound names like "Der VfGH" → "VfGH", "La UE" → "UE"
+    // to avoid Wikipedia finding an article about the article word itself (e.g. "Der" = neopagan org)
+    // Only do Wikipedia compound lookup when the fullName starts with uppercase (proper noun).
+    // A fully-lowercase multi-word phrase like "längere frist" is NOT a proper noun.
+    const _fullNameIsProper = fullName.length > 0 && fullName[0] === fullName[0].toUpperCase() && fullName[0] !== fullName[0].toLowerCase();
+    if (_fullNameIsProper && fullName !== word && fullName.includes(' ')) {
+      const _leadingArticleRe = /^(der|die|das|den|dem|des|ein|eine|einen|einem|einer|eines|le|la|les|l'|un|une|el|los|las|the|a|an|il|lo|i|gli|de|het|een)\s+/i;
+      const _stripped = fullName.replace(_leadingArticleRe, '');
+      if (_stripped !== fullName && _stripped.length > 1) fullName = _stripped;
+    }
     if (fullName !== word && fullName.includes(' ')) {
       const wikiFullName = await lookupWikipedia(fullName, targetLang);
       if (wikiFullName) { const r = [wikiFullName]; r.displayName = fullName; return r; }
+      _fullNameTriedAndFailed = true; // fullName lookup failed — skip single-word Wikipedia fallback
       // Full name hit a disambiguation page or was not found directly.
       // Try full-text search to find e.g. "Pablo Iglesias Turrion" or "Pablo Iglesias (politician)".
       try {
@@ -1938,10 +2411,16 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
         );
         if (fnRes.ok) {
           const fnData = await fnRes.json();
+          // Require fnTitle to contain ALL significant words from fullName
+          // e.g. fullName="Tamara Flores" → reject "Tamara Živković" (no "Flores")
+          const _fnQueryWords = fullName.toLowerCase().split(/\s+/)
+            .map(w => w.replace(/[^a-zà-ÿ]/gi, ''))
+            .filter(w => w.length >= 4);
           const fnHits = (fnData?.query?.search || [])
             .map(h => h.title)
             .filter(t => !/\bdisambiguation\b/i.test(t))
-            .filter(t => !/-(?:Tag|Day|Gedenktag|Memorial|Gedenkfeier)$/i.test(t));
+            .filter(t => !/-(?:Tag|Day|Gedenktag|Memorial|Gedenkfeier)$/i.test(t))
+            .filter(t => _fnQueryWords.length === 0 || _fnQueryWords.every(qw => t.toLowerCase().includes(qw)));
           for (const fnTitle of fnHits.slice(0, 2)) {
             const fnR = (targetLang && targetLang !== 'en')
               ? (await fetchWikiSummary(fnTitle, targetLang) || await fetchWikiSummary(fnTitle, 'en'))
@@ -1956,12 +2435,13 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
   // Wikipedia is only meaningful for proper nouns (capitalized words).
   // For lowercase common words (e.g. "defends"), OpenSearch returns unrelated
   // articles (e.g. "The Defenders" Marvel show) — skip Wikipedia entirely.
-  if (isCapitalized) {
+  if (isCapitalized && !_fullNameTriedAndFailed) {
     // German genitive -s: try stripped form ("Deutschlands"→"Deutschland", "Südafrikas"→"Südafrika").
     // Uses direct fetchWikiSummary only (no OpenSearch) to avoid false positives.
     // After finding in any language, converts to target language via English bridge.
-    // "Haus"→"Hau", "Paris"→"Pari" → null everywhere → ignored.
-    if (word.endsWith('s') && !word.endsWith('ss') && word.length > 4) {
+    // "Haus"→"Hau", "Paris"→"Pari" → Spanish Wikipedia has "Pari (Estonia)" → wrong match.
+    // Require ≥6 chars so "Paris" (5) is excluded but "Putins" (6), "Merkels" (7) etc. pass.
+    if (word.endsWith('s') && !word.endsWith('ss') && word.length > 5) {
       const stripped = word.slice(0, -1);
       const tryLangs = targetLang && targetLang !== 'en' ? [targetLang, 'en', 'de'] : ['en', 'de'];
       let strippedWiki = null;
@@ -2061,7 +2541,7 @@ async function lookupDefinition(word, targetLang = 'en', context = null) {
   // Direct Wikipedia lookup found nothing — try full-text person search as fallback.
   // Handles surnames like "Merz" where Wikipedia has "Friedrich Merz" but no standalone "Merz" article,
   // and direct lookup (fetchWikiSummary) returns null while the search API finds the person.
-  if (isCapitalized && !word.includes(' ') && word.length >= 3) {
+  if (isCapitalized && !_fullNameTriedAndFailed && !word.includes(' ') && word.length >= 3) {
     const personWiki = await lookupWikipediaPersonFallback(word, targetLang);
     if (personWiki) return [personWiki];
   }
@@ -2157,11 +2637,46 @@ async function lookupWikipediaPersonFallback(word, targetLang) {
         const titleLow = (r.title || '').toLowerCase();
         const titleContainsWord = titleLow.includes(wordLow) ||
           (genitiveStripped && titleLow.includes(genitiveStripped));
-        if (!isFallbackGeo && !isEventChronicle && titleContainsWord) return r;
+        // Title's last word must also contain the queried word — prevents matching famous
+        // people by first name only (e.g. "TAMARA" → "Tamara de Lempicka", last="Lempicka" ✗)
+        // while still matching surnames: "Trump"→"Donald Trump" last="trump" ✓
+        const _cleanTitle = (r.title || '').replace(/\s*\(.*\)\s*$/, '').trim();
+        const _lastTitleWord = _cleanTitle.split(/\s+/).pop().toLowerCase().replace(/[^a-zà-ÿ]/gi, '');
+        const titleEndsWithWord = _lastTitleWord.includes(wordLow) ||
+          (genitiveStripped && _lastTitleWord.includes(genitiveStripped));
+        if (!isFallbackGeo && !isEventChronicle && titleContainsWord && titleEndsWithWord) return r;
       }
     }
   } catch {}
   return null;
+}
+
+// Validates that a Wikipedia result title contains all significant words from the query.
+// e.g. "Trump"→"Donald Trump" ✓ | "Tamara Flores"→"Austria in Eurovision 2026" ✗
+function _wikiTitleMatchesQuery(title, query) {
+  if (!title || !query) return false;
+  // Normalize diacritics so "SINKEVICIUS" matches "Sinkevičius", "ZUCKER" matches "Zuckerberg" etc.
+  const _nd = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const titleNorm = _nd(title);
+  const words = _nd(query).split(/\s+/)
+    .map(w => w.replace(/[^a-z]/gi, ''))
+    .filter(w => w.length >= 4);
+  return words.length === 0 || words.every(w => titleNorm.includes(w));
+}
+
+// For single-word queries: the article title's LAST word must contain the query.
+// Prevents "TAMARA" matching "Tamara de Lempicka" (last="Lempicka" ≠ "tamara")
+// while allowing "Trump"→"Donald Trump" (last="Trump" ✓) and "Merz"→"Friedrich Merz" ✓
+// Diacritics normalized: "SINKEVICIUS" matches "Sinkevičius" (č→c).
+function _wikiLastWordMatch(title, word) {
+  if (!title || !word || word.includes(' ')) return true; // only for single-word queries
+  const _nd = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const _cleanT = title.replace(/\s*\(.*\)\s*$/, '').trim();
+  // Apply _nd FIRST (strips diacritics like č→c), then strip non-ascii letters.
+  // [^a-zà-ÿ] would incorrectly drop chars above U+00FF (e.g. č=U+010D) before NFD.
+  const _lastW = _nd(_cleanT.split(/\s+/).pop()).replace(/[^a-z]/g, '');
+  const _wl = _nd(word).replace(/[^a-z]/g, '');
+  return _lastW.includes(_wl);
 }
 
 async function lookupWikipedia(word, targetLang = 'en') {
@@ -2170,37 +2685,69 @@ async function lookupWikipedia(word, targetLang = 'en') {
     if (targetLang !== 'en') {
       const targetResult = await fetchWikiSummary(word, targetLang);
       if (targetResult) {
-        // If target-lang returned a biographical entry (person born in a year), also check
-        // English Wikipedia before returning. Some target-lang Wikis have the same title
-        // pointing to a person while the more notable entry is the concept/disease/etc.
-        // e.g. "Ebola" → es.wikipedia = Icelandic musician, en.wikipedia = viral disease.
-        const isBiographical = /\b(born|nacido|nació|né|geboren)\b.{0,30}\d{4}|\(\d{4}[–\-]/.test(targetResult.text);
-        if (!isBiographical) return targetResult;
-        const engResult = await fetchWikiSummary(word, 'en');
-        if (engResult) {
-          const engIsBio = /\bborn\b.{0,30}\d{4}|\(\d{4}[–\-]/.test(engResult.text);
-          if (!engIsBio) return engResult; // English has a non-biographical result — prefer it
+        // For multi-word queries, validate the result title contains the significant words.
+        // e.g. "Tamara Flores" → es.wikipedia returns "Tamara Živković" (redirect/wrong) → reject.
+        if (word.includes(' ')) {
+          const _qWords = word.toLowerCase().split(/\s+/)
+            .map(w => w.replace(/[^a-zà-ÿ]/gi, '').toLowerCase())
+            .filter(w => w.length >= 4);
+          const _rTitle = (targetResult.title || '').toLowerCase();
+          if (_qWords.length > 0 && !_qWords.every(qw => _rTitle.includes(qw))) {
+            // Result title doesn't match query — skip this result
+          } else {
+            // If target-lang returned a biographical entry (person born in a year), also check
+            // English Wikipedia before returning. Some target-lang Wikis have the same title
+            // pointing to a person while the more notable entry is the concept/disease/etc.
+            // e.g. "Ebola" → es.wikipedia = Icelandic musician, en.wikipedia = viral disease.
+            const isBiographical = /\b(born|nacido|nació|né|geboren)\b.{0,30}\d{4}|\(\d{4}[–\-]/.test(targetResult.text);
+            if (!isBiographical) return targetResult;
+            const engResult = await fetchWikiSummary(word, 'en');
+            if (engResult && _wikiTitleMatchesQuery(engResult.title, word)) {
+              const engIsBio = /\bborn\b.{0,30}\d{4}|\(\d{4}[–\-]/.test(engResult.text);
+              if (!engIsBio) return engResult; // English has a non-biographical result — prefer it
+            }
+            return targetResult; // Both biographical or no English result — keep target-lang
+          }
+        } else {
+          // Single-word query: validate title matches query word
+          if (!_wikiTitleMatchesQuery(targetResult.title, word) || !_wikiLastWordMatch(targetResult.title, word)) {
+            // Title doesn't contain/end with the queried word — skip
+          } else {
+            // Also treat mythological/fictional character articles like biographical ones:
+            // e.g. "Paris" → es.wiki = "príncipe troyano" (Paris de Troya), but en.wiki = Paris, France.
+            const isBiographical = /\b(born|nacido|nació|né|geboren)\b.{0,30}\d{4}|\(\d{4}[–\-]/.test(targetResult.text);
+            const isMythOrFiction = /\b(mitolog[ií]a|mythology|mythological|mitológico|leyenda|legend|personaje|fictional|ficticio|greek mythology|roman mythology|norse mythology|ancient greek)\b/i.test(targetResult.text);
+            if (!isBiographical && !isMythOrFiction) return targetResult;
+            const engResult = await fetchWikiSummary(word, 'en');
+            if (engResult && _wikiTitleMatchesQuery(engResult.title, word) && _wikiLastWordMatch(engResult.title, word)) return engResult;
+            return targetResult;
+          }
         }
-        return targetResult; // Both biographical or no English result — keep target-lang
       }
     }
 
     // 2. Try English Wikipedia direct lookup
     const direct = await fetchWikiSummary(word, 'en');
-    if (direct) return direct;
+    if (direct && _wikiTitleMatchesQuery(direct.title, word) && _wikiLastWordMatch(direct.title, word)) return direct;
 
     // 3. OpenSearch fallback on English Wikipedia.
     // Skip for hyphenated compounds — the fuzzy match returns unrelated articles
     // (e.g. "AI-KRASCHEN" → "Ai" the Taiwanese artist instead of "AI crash").
     if (word.includes('-')) return null;
-
     const searchRes = await fetch(
       `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(word)}&limit=1&format=json&origin=*`
     );
     if (!searchRes.ok) return null;
     const searchData = await searchRes.json();
     const articleTitle = searchData[1]?.[0];
-    if (!articleTitle || articleTitle.toLowerCase() === word.toLowerCase()) return null;
+    // If OpenSearch returns the exact same word as the title, it may be a redirect page.
+    // Instead of rejecting, still fetch it — the REST API follows redirects and may resolve
+    // to a proper article (e.g. "Sinkevicius" → redirect → "Virginijus Sinkevičius").
+    // Only reject if no title returned at all.
+    if (!articleTitle) return null;
+    // Validate title contains all significant query words + last word match for single-word queries
+    if (!_wikiTitleMatchesQuery(articleTitle, word)) return null;
+    if (!_wikiLastWordMatch(articleTitle, word)) return null;
 
     // Reject if the article title is much shorter than the query — indicates a
     // prefix-only match rather than a genuine article for this term.
