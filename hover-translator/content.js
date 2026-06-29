@@ -341,8 +341,16 @@
           while (j < text.length && wordChar.test(text[j])) j++;
           const particle = text.substring(pStart, j).toLowerCase();
           if (particles.includes(particle)) {
-            end = j;
-            word = text.substring(start, end).trim();
+            // Don't grab particle if followed by a capitalized word — that's a prepositional
+            // phrase, not a phrasal verb. e.g. "tariff on European nations" → "on" + "E" → skip.
+            // "give up hope" → "up" + "h" (lowercase) → grab.
+            let afterP = j;
+            while (afterP < text.length && text.charCodeAt(afterP) === 32) afterP++;
+            const nextIsCapital = afterP < text.length && /^[A-Z\xC0-\xD6]/.test(text[afterP]);
+            if (!nextIsCapital) {
+              end = j;
+              word = text.substring(start, end).trim();
+            }
           }
         }
       }
@@ -549,11 +557,12 @@
       const usableContext = response.contextTranslation && !response.sameLanguage;
       const hasContent = response.translation || response.definition || usableContext;
       // Use displayWord if background.js fell back to a shorter word (e.g. "Remember" from "Remember Ebola")
-      // If getWordAtPoint returned a multi-word unit (e.g. "Pablo Iglesias" from a link text node),
-      // use it directly as the display name — background.js strips it to firstWord which is wrong.
-      const displayWord = (word.includes(' ') ? word : null)
-        || response.displayWord
+      // Prioritize response.displayWord (set by background.js) over the multi-word local expansion:
+      // background.js knows better — for "Pablo Iglesias" it returns the full name,
+      // for "Ausländerhass Südafrikas Wirtschaft" (no Wikipedia entry) it returns just "Ausländerhass".
+      const displayWord = response.displayWord
         || displayWordCache.get(word)
+        || (word.includes(' ') ? word : null)
         || word;
       if (/^pablo$/i.test(word) || /^iglesias$/i.test(word)) {
       }
@@ -755,7 +764,9 @@
                     // but the correct translation is simply "cultural" from GT.
                     && (!_isGermanLower || !sentenceExtracted.includes(' '))
                     ? sentenceExtracted
-                    : (useChunk ? extractedTranslation : translation))));
+                    : (useChunk && (!_isGermanLower || !extractedTranslation?.includes(' '))
+                        ? extractedTranslation
+                        : translation))));
 
         // Show word translation + alternatives.
         // When the bilingual dict returns ≥2 POS groups (verb + noun, verb + adj, etc.),
@@ -800,10 +811,11 @@
             ? ` <span class="ht-alts">/ ${translations.slice(1).map(escapeHtml).join(' / ')}</span>`
             : '';
         } else {
-          // Suppress noun alternatives for German lowercase words (verbs/adj can't be nouns in German).
-          // Also suppress all word alternatives when sentence-extracted translation is shown,
-          // since those alts come from the wrong (noun-biased) word lookup.
-          const _filteredAlts = (_isGermanLower || _sentenceOverride) ? [] : alternatives;
+          // Suppress alternatives when sentence-extracted translation overrides the word translation,
+          // since those alts come from an unrelated word lookup.
+          // For German lowercase words (verbs/adj), still show up to 2 alternatives so the user
+          // can see multiple verb meanings (e.g. "besetzt" → ocupado / adornado).
+          const _filteredAlts = _sentenceOverride ? [] : (_isGermanLower ? alternatives.slice(0, 2) : alternatives);
           altsHtml = _filteredAlts.length
             ? ` <span class="ht-alts">/ ${_filteredAlts.map(escapeHtml).join(' / ')}</span>`
             : '';
@@ -825,6 +837,8 @@
           const displaySentence = sentenceTranslation || contextTranslation;
           if (displaySentence) {
             secondaryHtml += `<div class="ht-context">${escapeHtml(displaySentence)}</div>`;
+          } else if (contextPhrase) {
+            secondaryHtml += `<div class="ht-phrase-hint">« ${escapeHtml(contextPhrase)} »</div>`;
           }
         }
         if (separableVerb && separableVerb.infinitive && separableVerb.translation) {
@@ -838,6 +852,7 @@
         // Context is only useful when it doesn't just echo the word back
         // e.g. "to shimmy with" → "para hacer shimmy con" is useless for "shimmy"
         const ctxUseful = contextTranslation &&
+          contextTranslation.trim().split(/\s+/).length <= 2 &&
           !new RegExp('\\b' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i')
             .test(contextTranslation);
 
@@ -862,11 +877,12 @@
             return `<span class="ht-definition">${posHtml}${escapeHtml(d.text)}</span>`;
           }).join('<br>');
         }
-      } else if (contextTranslation) {
+      } else if (contextTranslation && contextTranslation.trim().split(/\s+/).length <= 2) {
         // ── No word translation and no definition: context is all we have ──
+        // Only use if it's 1-2 words (a word translation), not a sentence fragment
         mainHtml = `<span class="ht-translation">${escapeHtml(contextTranslation)}</span>`;
       } else {
-        mainHtml = `<span class="ht-no-translation">no direct translation</span>`;
+        mainHtml = `<span class="ht-no-translation">sin datos / no direct translation</span>`;
       }
 
       // Hint when text is already in the target language
