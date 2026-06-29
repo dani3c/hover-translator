@@ -30,11 +30,19 @@ Spanish, English, French, German, Italian, Portuguese, Dutch, Polish, Russian, U
 **Smart word detection**
 Works correctly with CJK languages (Chinese, Japanese, Korean), Arabic, and all European languages including special characters and diacritics.
 
+**Always getting better**
+We release updates every month — improving translation accuracy, fixing edge cases, and adding new language support. Every bug report and piece of feedback shapes the next release.
+
 **Freemium — free to try, fair to use**
 - ✅ Free: 100 word translations per day
 - ⭐ Premium: Unlimited* translations for a one-time payment of €14.99 — choose your preferred translation engine
 
 _*Up to 10,000 translations/day — more than you could ever use in a day of normal browsing._
+
+If Hover Translator saves you time every day, consider going Premium. It's a one-time payment that directly funds continued development and keeps the updates coming. Thank you for your support 🙏
+
+**Found a bug? We want to hear from you**
+Spotted something that doesn't translate correctly? Write to us at info@promeseo.com and we'll do our best to fix it in the next release.
 
 **Privacy first**
 No account required. No data collected. Translations are processed via external APIs but your browsing history is never stored or shared. See our full privacy policy for details.
