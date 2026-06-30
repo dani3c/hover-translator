@@ -1,5 +1,7 @@
 # Secrets — NEVER commit
 license-worker/SECRETS.md
+license-worker/.wrangler/
+gh_token.txt
 
 # ZIP releases (subir por separado a Chrome Web Store)
 *.zip
@@ -7,6 +9,7 @@ license-worker/SECRETS.md
 # Python scripts de deploy (opcionales, contienen historial de fixes)
 push_*.py
 fix_*.py
+deploy_*.py
 
 # OS
 .DS_Store
