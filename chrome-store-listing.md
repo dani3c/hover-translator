@@ -86,3 +86,39 @@ Use icon128.png (already in the ZIP)
 
 ## Promo tile (optional, 440×280)
 Use gumroad_thumbnail.png if available, or leave blank for MVP submission.
+
+---
+
+## What's new — v1.0.3
+_(Paste this in the "What's new in this version" field when submitting the update)_
+
+**v1.0.3 — Smarter translations & stability fixes**
+
+🔧 **Critical fix:** The extension now installs and works correctly from the Chrome Web Store. Previous versions (1.0.1, 1.0.2) had a packaging issue that caused hover translations to not appear after installation.
+
+🇩🇪 **Better German support**
+- Function words like *man*, *es*, *sich*, *doch*, *weil* and 40+ more now show accurate translations instead of being confused with English words
+- Dates and ordinals (*19. Februar*, *3. Kapitel*) are no longer split mid-sentence
+- Verb forms like *Umgeben* now correctly show *rodeada* (past participle in context)
+- Adjectives like *kulturelle* and verb forms like *wolle* now translate correctly
+
+🌍 **More languages improved**
+- French: *on*, *y*, *en*, *donc* and 20+ function words fixed
+- Italian: *si*, *ci*, *ne*, *già*, *però* and more
+- Portuguese and Dutch: common pronouns and conjunctions corrected
+
+🏛️ **Proper nouns & acronyms**
+- *UE*, *OTAN*, *OMS* and 30+ acronyms now show the correct name in your language (not just English)
+- *Deutschlands*, *Südafrikas* now link to Wikipedia in your target language
+- Ambiguous names like *PARIS* resolve to the city, not the mythological figure
+- Parenthetical expansions (*"IHS (Institut für Höhere Studien)"*) detected automatically
+
+---
+
+## Version history
+
+| Version | Date | Summary |
+|---------|------|---------|
+| 1.0.3 | 2026-06 | Critical ZIP fix, German function words, proper noun improvements |
+| 1.0.2 | 2026-06 | German noun/verb logic, sentence diff improvements |
+| 1.0.1 | 2026-05 | Initial public release |
